@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  background-color: #f1f5f9;
+}
+
+body {
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+/* Checkbox tap target — gros pour utilisation avec gants */
+.tap-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+input[type='checkbox'].big-check {
+  width: 28px;
+  height: 28px;
+  accent-color: #16a34a;
+  cursor: pointer;
+}
+
+/* Anti-flash bleu iOS sur tap */
+button,
+label,
+[role='button'] {
+  -webkit-tap-highlight-color: transparent;
+}
