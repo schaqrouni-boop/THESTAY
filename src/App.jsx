@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { TYPOLOGIES, itemsForTypology, totalItemsFor } from './data.js';
 import Login from './Login.jsx';
 import SendModal from './SendModal.jsx';
+import PhotosSection from './PhotosSection.jsx';
+import { clearAllPhotos } from './storage.js';
 
 const STORAGE_KEY = 'suivi-chantier-v1';
 const AUTH_KEY = 'suivi-chantier-auth';
@@ -166,11 +168,24 @@ function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem })
             values={unitState.cuisine}
             onToggle={(item) => onToggleItem('cuisine', item)}
           />
+          <PhotosSection
+            typoId={typoId}
+            unitId={unitId}
+            section="cuisine"
+            enabled={isOpen}
+          />
+          <div className="my-4 border-t border-slate-200" />
           <ChecklistGroup
             title="Menuiserie"
             items={menuiserie}
             values={unitState.menuiserie}
             onToggle={(item) => onToggleItem('menuiserie', item)}
+          />
+          <PhotosSection
+            typoId={typoId}
+            unitId={unitId}
+            section="menuiserie"
+            enabled={isOpen}
           />
         </div>
       )}
@@ -264,14 +279,19 @@ export default function App() {
     setMenuOpen(false);
   }, [state]);
 
-  const resetAll = useCallback(() => {
+  const resetAll = useCallback(async () => {
     if (
       window.confirm(
-        'Réinitialiser toutes les données du chantier ?\n\nCette action est irréversible.'
+        'Réinitialiser toutes les données du chantier ?\n\nCela efface les cases cochées ET les photos.\nCette action est irréversible.'
       )
     ) {
       setState({});
       setOpenUnitId(null);
+      try {
+        await clearAllPhotos();
+      } catch (e) {
+        console.warn('Échec de la suppression des photos IDB', e);
+      }
     }
     setMenuOpen(false);
   }, []);

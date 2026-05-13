@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
 import { generateReport } from './pdf.js';
+import { countPhotosBySection } from './storage.js';
 
 const TECH_NAME_KEY = 'suivi-chantier-tech-name';
 
@@ -41,6 +42,8 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
+  const [includePhotos, setIncludePhotos] = useState(true);
+  const [photoCounts, setPhotoCounts] = useState({ cuisine: 0, menuiserie: 0 });
 
   useEffect(() => {
     if (open) {
@@ -50,6 +53,18 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
       setError(null);
       // Reset signature au prochain affichage
       setTimeout(() => sigRef.current?.clear?.(), 50);
+      // Compteurs photos
+      (async () => {
+        try {
+          const [cuisine, menuiserie] = await Promise.all([
+            countPhotosBySection('cuisine'),
+            countPhotosBySection('menuiserie')
+          ]);
+          setPhotoCounts({ cuisine, menuiserie });
+        } catch (e) {
+          console.warn('Compteur photos KO', e);
+        }
+      })();
     }
   }, [open, defaultTechnicianName]);
 
@@ -105,7 +120,8 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
           section,
           state,
           technicianName: name,
-          signatureDataUrl
+          signatureDataUrl,
+          includePhotos
         });
         files.push(new File([blob], fileName, { type: 'application/pdf' }));
       }
@@ -194,6 +210,27 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
               Signez avec le doigt ou un stylet.
             </p>
           </div>
+
+          <label className="flex items-start gap-3 px-3 py-3 rounded-lg bg-slate-50 border-2 border-slate-200 cursor-pointer">
+            <input
+              type="checkbox"
+              className="big-check flex-shrink-0 mt-0.5"
+              checked={includePhotos}
+              onChange={(e) => setIncludePhotos(e.target.checked)}
+            />
+            <span className="flex-1 text-sm">
+              <span className="font-bold text-slate-900 block">Inclure les photos</span>
+              <span className="text-slate-600 text-xs">
+                Cuisine : {photoCounts.cuisine} · Menuiserie : {photoCounts.menuiserie}
+                {photoCounts.cuisine + photoCounts.menuiserie > 0 && (
+                  <span className="block mt-0.5">Pages photos jointes à chaque rapport.</span>
+                )}
+                {photoCounts.cuisine + photoCounts.menuiserie === 0 && (
+                  <span className="block mt-0.5 italic">Aucune photo enregistrée.</span>
+                )}
+              </span>
+            </span>
+          </label>
 
           {error && (
             <div className="bg-red-50 border-2 border-red-300 text-red-800 px-3 py-2 rounded-lg text-sm font-medium">

@@ -4,6 +4,8 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { TYPOLOGIES, itemsForTypology } from './data.js';
+import { getPhotosBySection } from './storage.js';
+import { blobToDataURL, loadImageEl } from './photoUtils.js';
 
 const PRIMARY = [30, 64, 175]; // bleu THE STAY
 const SLATE = [71, 85, 105];
@@ -259,9 +261,122 @@ function drawTypologyTable(doc, { section, typology, state, startY }) {
   };
 }
 
+// --------- Pages photos ---------
+
+async function appendPhotoPages(doc, sectionLabel, photos) {
+  if (!photos.length) return;
+
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const marginX = 10;
+  const topY = 60; // sous le header
+  const bottomLimit = pageH - 58; // au-dessus de la zone signature/footer
+
+  // Grouper par typo + unité
+  const groups = new Map();
+  for (const p of photos) {
+    const key = `${p.typoId}|${p.unitId}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+
+  const typoLabel = (id) =>
+    TYPOLOGIES.find((t) => t.id === id)?.label || id;
+
+  doc.addPage();
+  await drawHeader(doc, sectionLabel + ' — Photos');
+  let y = topY;
+  let firstOnPage = true;
+
+  const colGap = 6;
+  const slotW = (pageW - marginX * 2 - colGap) / 2; // largeur slot photo
+  const slotH = 60; // hauteur slot photo (mm)
+
+  const newPage = async () => {
+    doc.addPage();
+    await drawHeader(doc, sectionLabel + ' — Photos');
+    y = topY;
+    firstOnPage = true;
+  };
+
+  for (const [key, items] of groups) {
+    const [typoId, unitId] = key.split('|');
+    const heading = `${unitId} — ${typoLabel(typoId)}`;
+
+    // Titre d'unité
+    if (y + 8 > bottomLimit) await newPage();
+    if (!firstOnPage) y += 4;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...PRIMARY);
+    doc.text(heading, marginX, y);
+    y += 6;
+    firstOnPage = false;
+
+    // Photos en grille 2 colonnes
+    let col = 0;
+    for (let i = 0; i < items.length; i++) {
+      const p = items[i];
+      let dataUrl;
+      let imgW;
+      let imgH;
+      try {
+        dataUrl = await blobToDataURL(p.blob);
+        const img = await loadImageEl(dataUrl);
+        imgW = img.naturalWidth || img.width;
+        imgH = img.naturalHeight || img.height;
+      } catch (e) {
+        console.warn('Photo non chargée', e);
+        continue;
+      }
+
+      // Adapter au slot en gardant le ratio (contain)
+      const r = Math.min(slotW / imgW, slotH / imgH);
+      const drawW = imgW * r;
+      const drawH = imgH * r;
+
+      // Nouvelle ligne si besoin
+      if (col === 0 && y + slotH > bottomLimit) {
+        await newPage();
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(...PRIMARY);
+        doc.text(heading + ' (suite)', marginX, y);
+        y += 6;
+        firstOnPage = false;
+      }
+
+      const slotX = marginX + col * (slotW + colGap);
+      const slotY = y;
+
+      // Cadre + photo centrée dans le slot
+      doc.setDrawColor(...GRAY);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(slotX, slotY, slotW, slotH, 1.2, 1.2, 'FD');
+      const offsetX = slotX + (slotW - drawW) / 2;
+      const offsetY = slotY + (slotH - drawH) / 2;
+      try {
+        doc.addImage(dataUrl, 'JPEG', offsetX, offsetY, drawW, drawH);
+      } catch (e) {
+        console.warn('addImage failed', e);
+      }
+
+      col += 1;
+      if (col === 2) {
+        col = 0;
+        y += slotH + 4;
+      }
+    }
+    if (col !== 0) {
+      // Clore la ligne en cours
+      y += slotH + 4;
+    }
+  }
+}
+
 // --------- Génération d'un rapport (section) ---------
 
-export async function generateReport({ section, state, technicianName, signatureDataUrl }) {
+export async function generateReport({ section, state, technicianName, signatureDataUrl, includePhotos = true }) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const sectionLabel = section === 'cuisine' ? 'Rapport Cuisine' : 'Rapport Menuiserie';
   const dateStr = formatDate();
@@ -311,11 +426,27 @@ export async function generateReport({ section, state, technicianName, signature
     cursorY = endY + 8;
   }
 
-  // Re-passer sur toutes les pages pour redessiner header/footer
+  // Nombre de pages "tableaux" — au-delà ce sera les pages photos qui ont
+  // déjà leur propre header "— Photos".
+  const lastTablePage = doc.internal.getNumberOfPages();
+
+  if (includePhotos) {
+    try {
+      const photos = await getPhotosBySection(section);
+      if (photos.length) {
+        await appendPhotoPages(doc, sectionLabel, photos);
+      }
+    } catch (e) {
+      console.warn('Photos non incluses :', e);
+    }
+  }
+
+  // Re-passer sur toutes les pages pour ajouter header (sur les pages
+  // tableaux > 1 qui n'en ont pas) et footer (signature + numéro).
   const pageCount = doc.internal.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
-    if (p > 1) {
+    if (p > 1 && p <= lastTablePage) {
       await drawHeader(doc, sectionLabel);
     }
     await drawSignatureAndFooter(doc, { signatureDataUrl, technicianName, dateStr });
