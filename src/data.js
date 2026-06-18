@@ -176,6 +176,38 @@ export const LOT_ITEMS = {
     cabines_miroirs: CABINES_MIROIRS
   },
 
+  couloirs: {
+    boiserie_bibancom: ['Porte Placard'],
+    electricien_sobimel: [
+      'Interrupteurs',
+      'Caches',
+      'Détecteurs',
+      'Tableau Électrique',
+      'Spots',
+      'Caméras',
+      'Appliques ESC Principaux',
+      'Appliques ESC Secours',
+      'LEDs Escaliers'
+    ],
+    peinture: [
+      'Enduit Murs',
+      'Finition Murs Couloir',
+      'Finition Murs ESC Principaux',
+      'Finition Murs ESC Secours',
+      'Finition Plafonds Couloir',
+      'Finition Plafonds ESC Principaux',
+      'Finition Plafonds ESC Secours',
+      'Finition Porte Coupe-Feu',
+      'Finition Garde-Corps'
+    ],
+    marbre_carreaux: [
+      'Pose Marbre',
+      'Plinthe Marbre',
+      'Ponçage Marbre',
+      'Lustrage Marbre'
+    ]
+  },
+
   appt3c: {
     cuisine_woodymar: CUISINE_WOODYMAR,
     boiserie_bibancom: [
@@ -296,6 +328,15 @@ export const TYPOLOGIES = [
     label: 'Appartement 3C',
     short: 'Appt 3C',
     units: ['A11', 'A13', 'A21', 'A23', 'A31', 'A33', 'A41', 'A43', 'A51', 'A53']
+  },
+  {
+    id: 'couloirs',
+    label: 'Couloirs & ESC',
+    short: 'Couloirs',
+    units: [
+      'SS1-APPT', 'SS2-APPT', 'RDC-APPT', '1ER-APPT', '2eme-APPT', '3eme-APPT', '4eme-APPT', '5eme-APPT',
+      'SS1-STUDIOS', 'SS2-STUDIOS', 'RDC-STUDIOS', '1ER-STUDIOS', '2eme-STUDIOS', '3eme-STUDIOS', '4eme-STUDIOS', '5eme-STUDIOS'
+    ]
   }
 ];
 
@@ -343,6 +384,12 @@ export function flatItemsForLot(typoId, lotId) {
 
 export function totalItemsForLot(typoId, lotId) {
   return flatItemsForLot(typoId, lotId).length;
+}
+
+// Retourne uniquement les lots qui ont des items pour la typologie donnée.
+// Permet de masquer les lots non applicables (ex : pas de cuisine pour les couloirs).
+export function lotsForTypology(typoId) {
+  return LOTS.filter((lot) => totalItemsForLot(typoId, lot.id) > 0);
 }
 
 export function totalItemsFor(typoId) {

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import {
   TYPOLOGIES,
   LOTS,
+  lotsForTypology,
   groupsForLot,
   flatItemsForLot,
   totalItemsFor
@@ -256,7 +257,7 @@ function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem })
       </button>
       {isOpen && (
         <div className="px-3 pb-3 pt-3 border-t border-slate-200 bg-white space-y-2">
-          {LOTS.map((lot) => (
+          {lotsForTypology(typoId).map((lot) => (
             <LotSection
               key={lot.id}
               typoId={typoId}
