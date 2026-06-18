@@ -1,12 +1,34 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { TYPOLOGIES, itemsForTypology, totalItemsFor } from './data.js';
+import {
+  TYPOLOGIES,
+  LOTS,
+  groupsForLot,
+  flatItemsForLot,
+  totalItemsFor
+} from './data.js';
 import Login from './Login.jsx';
 import SendModal from './SendModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
 import { clearAllPhotos } from './storage.js';
 
-const STORAGE_KEY = 'suivi-chantier-v1';
+const STORAGE_KEY = 'suivi-chantier-v2';
 const AUTH_KEY = 'suivi-chantier-auth';
+const MIGRATION_FLAG = 'suivi-chantier-migrated-v2';
+
+// ---------- Migration v1 → v2 (au 1er chargement) ----------
+
+async function runMigrationIfNeeded() {
+  if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
+  try {
+    localStorage.removeItem('suivi-chantier-v1');
+  } catch {}
+  try {
+    await clearAllPhotos();
+  } catch (e) {
+    console.warn('Migration : suppression photos KO', e);
+  }
+  localStorage.setItem(MIGRATION_FLAG, '1');
+}
 
 // ---------- Persistance ----------
 
@@ -29,19 +51,28 @@ function saveState(state) {
   }
 }
 
-// ---------- Helpers ----------
+// ---------- Helpers progression ----------
+
+function lotProgress(state, typoId, unitId, lotId) {
+  const items = flatItemsForLot(typoId, lotId);
+  const us = state?.[typoId]?.[unitId]?.[lotId] || {};
+  const done = items.filter((it) => us[it.key]).length;
+  return { done, total: items.length };
+}
 
 function unitProgress(state, typoId, unitId) {
-  const { cuisine, menuiserie } = itemsForTypology(typoId);
-  const unitState = state?.[typoId]?.[unitId] || {};
-  const cuisineDone = cuisine.filter((it) => unitState.cuisine?.[it]).length;
-  const menuiserieDone = menuiserie.filter((it) => unitState.menuiserie?.[it]).length;
-  const done = cuisineDone + menuiserieDone;
-  const total = cuisine.length + menuiserie.length;
+  let done = 0;
+  let total = 0;
+  for (const lot of LOTS) {
+    const lp = lotProgress(state, typoId, unitId, lot.id);
+    done += lp.done;
+    total += lp.total;
+  }
   return { done, total };
 }
 
 function unitStatus(done, total) {
+  if (total === 0) return 'todo';
   if (done === 0) return 'todo';
   if (done >= total) return 'done';
   return 'inprogress';
@@ -59,11 +90,12 @@ function statusColor(status) {
 }
 
 function typoProgress(state, typoId, units) {
-  const per = totalItemsFor(typoId);
-  const total = per * units.length;
   let done = 0;
+  let total = 0;
   for (const u of units) {
-    done += unitProgress(state, typoId, u).done;
+    const up = unitProgress(state, typoId, u);
+    done += up.done;
+    total += up.total;
   }
   return { done, total };
 }
@@ -85,55 +117,117 @@ function ProgressBar({ done, total, size = 'md' }) {
   );
 }
 
-function ChecklistGroup({ title, items, values, onToggle }) {
+function LotChecklist({ groups, values, onToggle }) {
   return (
-    <div className="mb-4">
-      <h4 className="font-bold text-slate-800 text-base mb-2 uppercase tracking-wide">
-        {title}
-      </h4>
-      <ul className="space-y-1">
-        {items.map((item) => {
-          const checked = !!values?.[item];
-          return (
-            <li key={item}>
-              <label className="flex items-center gap-3 px-3 py-3 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 cursor-pointer tap-target border border-slate-200">
-                <input
-                  type="checkbox"
-                  className="big-check flex-shrink-0"
-                  checked={checked}
-                  onChange={() => onToggle(item)}
-                />
-                <span
-                  className={`text-base flex-1 ${
-                    checked ? 'line-through text-slate-500' : 'text-slate-900 font-medium'
-                  }`}
-                >
-                  {item}
-                </span>
-                {checked && (
-                  <span className="text-green-600 text-xl font-bold flex-shrink-0">✓</span>
-                )}
-              </label>
-            </li>
-          );
-        })}
-      </ul>
+    <ul className="space-y-1">
+      {groups.map((g, gi) => (
+        <li key={gi}>
+          {g.group && (
+            <h6 className="text-xs font-bold text-blue-800 uppercase tracking-wide mt-3 first:mt-1 mb-1 px-1">
+              {g.group}
+            </h6>
+          )}
+          <ul className="space-y-1">
+            {g.items.map((it) => {
+              const checked = !!values?.[it.key];
+              return (
+                <li key={it.key}>
+                  <label className="flex items-center gap-3 px-3 py-3 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 cursor-pointer tap-target border border-slate-200">
+                    <input
+                      type="checkbox"
+                      className="big-check flex-shrink-0"
+                      checked={checked}
+                      onChange={() => onToggle(it.key)}
+                    />
+                    <span
+                      className={`text-base flex-1 ${
+                        checked ? 'line-through text-slate-500' : 'text-slate-900 font-medium'
+                      }`}
+                    >
+                      {it.label}
+                    </span>
+                    {checked && (
+                      <span className="text-green-600 text-xl font-bold flex-shrink-0">✓</span>
+                    )}
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function LotSection({ typoId, unitId, lot, state, onToggleItem }) {
+  const [open, setOpen] = useState(false);
+  const groups = useMemo(() => groupsForLot(typoId, lot.id), [typoId, lot.id]);
+  const { done, total } = lotProgress(state, typoId, unitId, lot.id);
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  const status = unitStatus(done, total);
+  const c = statusColor(status);
+  const values = state?.[typoId]?.[unitId]?.[lot.id] || {};
+
+  return (
+    <div className={`rounded-lg border-2 ${c.border} ${c.bg} overflow-hidden`}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-3 py-3 flex items-center gap-2 text-left tap-target"
+        aria-expanded={open}
+      >
+        <span className="text-xl flex-shrink-0" aria-hidden>{lot.icon}</span>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="font-bold text-sm text-slate-900 truncate">{lot.label}</span>
+            <span className={`text-xs font-semibold ${c.text} flex-shrink-0`}>
+              {done}/{total} · {pct}%
+            </span>
+          </div>
+          <div className="mt-1.5">
+            <ProgressBar done={done} total={total} size="sm" />
+          </div>
+        </div>
+        <span
+          className={`text-lg text-slate-500 transform transition-transform flex-shrink-0 ${
+            open ? 'rotate-180' : ''
+          }`}
+          aria-hidden
+        >
+          ▾
+        </span>
+      </button>
+      {open && (
+        <div className="px-3 pb-3 pt-1 border-t border-slate-200 bg-white">
+          <LotChecklist
+            groups={groups}
+            values={values}
+            onToggle={(itemKey) => onToggleItem(lot.id, itemKey)}
+          />
+          <div className="mt-3">
+            <PhotosSection
+              typoId={typoId}
+              unitId={unitId}
+              section={lot.id}
+              enabled={open}
+              labelOverride={`Photos ${lot.short.toLowerCase()}`}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem }) {
-  const { cuisine, menuiserie } = itemsForTypology(typoId);
-  const unitState = state?.[typoId]?.[unitId] || { cuisine: {}, menuiserie: {} };
   const { done, total } = unitProgress(state, typoId, unitId);
   const status = unitStatus(done, total);
   const c = statusColor(status);
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
 
   return (
-    <div
-      className={`rounded-xl border-2 ${c.border} ${c.bg} shadow-sm overflow-hidden transition-all`}
-    >
+    <div className={`rounded-xl border-2 ${c.border} ${c.bg} shadow-sm overflow-hidden transition-all`}>
       <button
         onClick={onToggleOpen}
         className="w-full px-4 py-4 flex items-center gap-3 text-left tap-target"
@@ -161,32 +255,17 @@ function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem })
         </span>
       </button>
       {isOpen && (
-        <div className="px-4 pb-4 pt-2 border-t border-slate-200 bg-white">
-          <ChecklistGroup
-            title="Cuisine"
-            items={cuisine}
-            values={unitState.cuisine}
-            onToggle={(item) => onToggleItem('cuisine', item)}
-          />
-          <PhotosSection
-            typoId={typoId}
-            unitId={unitId}
-            section="cuisine"
-            enabled={isOpen}
-          />
-          <div className="my-4 border-t border-slate-200" />
-          <ChecklistGroup
-            title="Menuiserie"
-            items={menuiserie}
-            values={unitState.menuiserie}
-            onToggle={(item) => onToggleItem('menuiserie', item)}
-          />
-          <PhotosSection
-            typoId={typoId}
-            unitId={unitId}
-            section="menuiserie"
-            enabled={isOpen}
-          />
+        <div className="px-3 pb-3 pt-3 border-t border-slate-200 bg-white space-y-2">
+          {LOTS.map((lot) => (
+            <LotSection
+              key={lot.id}
+              typoId={typoId}
+              unitId={unitId}
+              lot={lot}
+              state={state}
+              onToggleItem={(lotId, itemKey) => onToggleItem(lotId, itemKey)}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -211,6 +290,11 @@ export default function App() {
   const [sendOpen, setSendOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Migration v1 → v2 au 1er chargement
+  useEffect(() => {
+    runMigrationIfNeeded();
+  }, []);
+
   useEffect(() => {
     saveState(state);
   }, [state]);
@@ -220,22 +304,19 @@ export default function App() {
     [activeTypoId]
   );
 
-  const toggleItem = useCallback(
-    (typoId, unitId, section, item) => {
-      setState((prev) => {
-        const next = { ...prev };
-        const typoBlock = { ...(next[typoId] || {}) };
-        const unitBlock = { ...(typoBlock[unitId] || {}) };
-        const sectionBlock = { ...(unitBlock[section] || {}) };
-        sectionBlock[item] = !sectionBlock[item];
-        unitBlock[section] = sectionBlock;
-        typoBlock[unitId] = unitBlock;
-        next[typoId] = typoBlock;
-        return next;
-      });
-    },
-    []
-  );
+  const toggleItem = useCallback((typoId, unitId, lotId, itemKey) => {
+    setState((prev) => {
+      const next = { ...prev };
+      const typoBlock = { ...(next[typoId] || {}) };
+      const unitBlock = { ...(typoBlock[unitId] || {}) };
+      const lotBlock = { ...(unitBlock[lotId] || {}) };
+      lotBlock[itemKey] = !lotBlock[itemKey];
+      unitBlock[lotId] = lotBlock;
+      typoBlock[unitId] = unitBlock;
+      next[typoId] = typoBlock;
+      return next;
+    });
+  }, []);
 
   const filteredUnits = useMemo(() => {
     if (!activeTypo) return [];
@@ -250,16 +331,23 @@ export default function App() {
   // ---------- Export CSV ----------
 
   const exportCSV = useCallback(() => {
-    const rows = [['Typologie', 'Unité', 'Section', 'Élément', 'État']];
+    const rows = [['Typologie', 'Unité', 'Lot', 'Groupe', 'Élément', 'État']];
     for (const typo of TYPOLOGIES) {
-      const { cuisine, menuiserie } = itemsForTypology(typo.id);
       for (const unit of typo.units) {
         const us = state?.[typo.id]?.[unit] || {};
-        for (const it of cuisine) {
-          rows.push([typo.label, unit, 'Cuisine', it, us.cuisine?.[it] ? 'OK' : '']);
-        }
-        for (const it of menuiserie) {
-          rows.push([typo.label, unit, 'Menuiserie', it, us.menuiserie?.[it] ? 'OK' : '']);
+        for (const lot of LOTS) {
+          const items = flatItemsForLot(typo.id, lot.id);
+          const lotState = us[lot.id] || {};
+          for (const it of items) {
+            rows.push([
+              typo.label,
+              unit,
+              lot.label,
+              it.group || '',
+              it.label,
+              lotState[it.key] ? 'OK' : ''
+            ]);
+          }
         }
       }
     }
@@ -346,7 +434,7 @@ export default function App() {
               </div>
               <div className="min-w-0">
                 <h1 className="text-base font-bold leading-tight truncate">Suivi Chantier</h1>
-                <p className="text-[11px] text-blue-100">Menuiserie & Cuisines</p>
+                <p className="text-[11px] text-blue-100">9 lots · réception travaux</p>
               </div>
             </div>
 
@@ -370,10 +458,7 @@ export default function App() {
 
               {menuOpen && (
                 <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => setMenuOpen(false)}
-                  />
+                  <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
                   <div className="absolute right-0 top-full mt-2 z-40 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 w-56 overflow-hidden">
                     <div className="px-3 py-2 border-b border-slate-200 bg-slate-50">
                       <p className="text-xs text-slate-500">Connecté en tant que</p>
@@ -495,7 +580,9 @@ export default function App() {
               state={state}
               isOpen={openUnitId === unitId}
               onToggleOpen={() => setOpenUnitId((prev) => (prev === unitId ? null : unitId))}
-              onToggleItem={(section, item) => toggleItem(activeTypo.id, unitId, section, item)}
+              onToggleItem={(lotId, itemKey) =>
+                toggleItem(activeTypo.id, unitId, lotId, itemKey)
+              }
             />
           ))
         )}

@@ -37,7 +37,7 @@ function usePhotosForUnit(typoId, unitId, section, enabled) {
   return { items, refresh };
 }
 
-export default function PhotosSection({ typoId, unitId, section, enabled, onChange }) {
+export default function PhotosSection({ typoId, unitId, section, enabled, onChange, labelOverride }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -82,7 +82,7 @@ export default function PhotosSection({ typoId, unitId, section, enabled, onChan
     <div className="mt-2">
       <div className="flex items-center justify-between mb-2">
         <h5 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
-          Photos {section === 'cuisine' ? 'cuisine' : 'menuiserie'}{' '}
+          {labelOverride || `Photos ${section}`}{' '}
           <span className="text-slate-400">({items.length})</span>
         </h5>
         <button
