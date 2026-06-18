@@ -355,7 +355,8 @@ export async function generateReport({
   state,
   technicianName,
   signatureDataUrl,
-  includePhotos = true
+  includePhotos = true,
+  sessionId = 'draft'
 }) {
   const lot = LOTS.find((l) => l.id === lotId);
   if (!lot) throw new Error(`Lot inconnu : ${lotId}`);
@@ -433,7 +434,7 @@ export async function generateReport({
 
   if (includePhotos) {
     try {
-      const photos = await getPhotosBySection(lotId);
+      const photos = await getPhotosBySection(lotId, sessionId);
       if (photos.length) {
         await appendPhotoPages(doc, title, photos);
       }

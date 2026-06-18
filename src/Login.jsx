@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
-const CREDENTIALS = {
-  username: 'Nabil',
-  password: 'THESTAY@2026'
+const USERS = {
+  Nabil: { password: 'THESTAY@2026', role: 'tech' },
+  Saad: { password: 'Admin@1320', role: 'admin' }
 };
 
 export default function Login({ onLogin }) {
@@ -13,12 +13,11 @@ export default function Login({ onLogin }) {
 
   const submit = (e) => {
     e.preventDefault();
-    if (
-      username.trim() === CREDENTIALS.username &&
-      password === CREDENTIALS.password
-    ) {
+    const u = username.trim();
+    const entry = USERS[u];
+    if (entry && password === entry.password) {
       setError(false);
-      onLogin(username.trim());
+      onLogin(u, entry.role);
     } else {
       setError(true);
     }
@@ -29,20 +28,11 @@ export default function Login({ onLogin }) {
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-2xl shadow-2xl p-6">
           <div className="flex justify-center mb-6">
-            <img
-              src="logo.svg"
-              alt="THE STAY"
-              className="h-14 w-auto"
-              draggable="false"
-            />
+            <img src="logo.svg" alt="THE STAY" className="h-14 w-auto" draggable="false" />
           </div>
 
-          <h1 className="text-center text-xl font-bold text-slate-900 mb-1">
-            Suivi Chantier
-          </h1>
-          <p className="text-center text-sm text-slate-500 mb-6">
-            Menuiserie & Cuisines
-          </p>
+          <h1 className="text-center text-xl font-bold text-slate-900 mb-1">Suivi Chantier</h1>
+          <p className="text-center text-sm text-slate-500 mb-6">Réception travaux</p>
 
           <form onSubmit={submit} className="space-y-4">
             <div>
@@ -100,9 +90,7 @@ export default function Login({ onLogin }) {
           </form>
         </div>
 
-        <p className="text-center text-xs text-blue-100 mt-4">
-          © THE STAY · Accès réservé
-        </p>
+        <p className="text-center text-xs text-blue-100 mt-4">© THE STAY · Accès réservé</p>
       </div>
     </div>
   );

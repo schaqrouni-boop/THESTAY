@@ -4,11 +4,12 @@ import {
   LOTS,
   lotsForTypology,
   groupsForLot,
-  flatItemsForLot,
-  totalItemsFor
+  flatItemsForLot
 } from './data.js';
 import Login from './Login.jsx';
-import SendModal from './SendModal.jsx';
+import Home from './Home.jsx';
+import HistoryView from './HistoryView.jsx';
+import SaveModal from './SaveModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
 import { clearAllPhotos } from './storage.js';
 
@@ -17,9 +18,9 @@ const AUTH_KEY = 'suivi-chantier-auth';
 const MIGRATION_FLAG = 'suivi-chantier-migrated-v2';
 const MIGRATION_V21_FLAG = 'suivi-chantier-migrated-v21';
 
-// ---------- Migration v1 → v2 (au 1er chargement) ----------
+// ---------- Migrations ----------
 
-async function runMigrationIfNeeded() {
+async function runV2MigrationIfNeeded() {
   if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
   try {
     localStorage.removeItem('suivi-chantier-v1');
@@ -27,14 +28,10 @@ async function runMigrationIfNeeded() {
   try {
     await clearAllPhotos();
   } catch (e) {
-    console.warn('Migration : suppression photos KO', e);
+    console.warn('Migration v2 : suppression photos KO', e);
   }
   localStorage.setItem(MIGRATION_FLAG, '1');
 }
-
-// ---------- Migration v2 → v2.1 : items boiserie regroupés sous "Quincaillerie" ----------
-// Les clés d'item passent de "Butoirs portes" à "Quincaillerie — Butoirs portes".
-// Cette fonction remap les clés en localStorage pour conserver l'avancement coché.
 
 const QUINCAILLERIE_REMAP = {
   studio: {
@@ -110,7 +107,22 @@ function saveState(state) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
-    console.warn('Échec de la sauvegarde localStorage', e);
+    console.warn('Échec sauvegarde localStorage', e);
+  }
+}
+
+function loadAuth() {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    if (!raw) return null;
+    // Ancien format : juste une string. On force re-login pour récupérer le rôle.
+    if (raw.startsWith('{')) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.username && parsed?.role) return parsed;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -163,7 +175,7 @@ function typoProgress(state, typoId, units) {
   return { done, total };
 }
 
-// ---------- Composants ----------
+// ---------- Composants UI ----------
 
 function ProgressBar({ done, total, size = 'md' }) {
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -180,7 +192,7 @@ function ProgressBar({ done, total, size = 'md' }) {
   );
 }
 
-function LotChecklist({ groups, values, onToggle }) {
+function LotChecklist({ groups, values, onToggle, readOnly }) {
   return (
     <ul className="space-y-1">
       {groups.map((g, gi) => (
@@ -195,12 +207,19 @@ function LotChecklist({ groups, values, onToggle }) {
               const checked = !!values?.[it.key];
               return (
                 <li key={it.key}>
-                  <label className="flex items-center gap-3 px-3 py-3 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 cursor-pointer tap-target border border-slate-200">
+                  <label
+                    className={`flex items-center gap-3 px-3 py-3 rounded-lg bg-slate-50 ${
+                      readOnly
+                        ? 'cursor-default opacity-90'
+                        : 'hover:bg-slate-100 active:bg-slate-200 cursor-pointer'
+                    } tap-target border border-slate-200`}
+                  >
                     <input
                       type="checkbox"
                       className="big-check flex-shrink-0"
                       checked={checked}
-                      onChange={() => onToggle(it.key)}
+                      onChange={() => !readOnly && onToggle(it.key)}
+                      disabled={readOnly}
                     />
                     <span
                       className={`text-base flex-1 ${
@@ -223,7 +242,7 @@ function LotChecklist({ groups, values, onToggle }) {
   );
 }
 
-function LotSection({ typoId, unitId, lot, state, onToggleItem }) {
+function LotSection({ typoId, unitId, lot, state, onToggleItem, readOnly, photosKey }) {
   const [open, setOpen] = useState(false);
   const groups = useMemo(() => groupsForLot(typoId, lot.id), [typoId, lot.id]);
   const { done, total } = lotProgress(state, typoId, unitId, lot.id);
@@ -267,14 +286,17 @@ function LotSection({ typoId, unitId, lot, state, onToggleItem }) {
             groups={groups}
             values={values}
             onToggle={(itemKey) => onToggleItem(lot.id, itemKey)}
+            readOnly={readOnly}
           />
           <div className="mt-3">
             <PhotosSection
+              key={photosKey}
               typoId={typoId}
               unitId={unitId}
               section={lot.id}
               enabled={open}
               labelOverride={`Photos ${lot.short.toLowerCase()}`}
+              readOnly={readOnly}
             />
           </div>
         </div>
@@ -283,7 +305,7 @@ function LotSection({ typoId, unitId, lot, state, onToggleItem }) {
   );
 }
 
-function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem }) {
+function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem, readOnly, photosKey }) {
   const { done, total } = unitProgress(state, typoId, unitId);
   const status = unitStatus(done, total);
   const c = statusColor(status);
@@ -327,6 +349,8 @@ function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem })
               lot={lot}
               state={state}
               onToggleItem={(lotId, itemKey) => onToggleItem(lotId, itemKey)}
+              readOnly={readOnly}
+              photosKey={photosKey}
             />
           ))}
         </div>
@@ -342,20 +366,164 @@ const FILTERS = [
   { id: 'done', label: 'Terminé' }
 ];
 
+function TypologyView({ user, role, typoId, state, onToggleItem, onBack, onExportCSV, onSave, photosKey }) {
+  const [openUnitId, setOpenUnitId] = useState(null);
+  const [filter, setFilter] = useState('all');
+
+  const activeTypo = useMemo(() => TYPOLOGIES.find((t) => t.id === typoId), [typoId]);
+  if (!activeTypo) return null;
+
+  const readOnly = role === 'admin';
+
+  const filteredUnits = activeTypo.units.filter((u) => {
+    const { done, total } = unitProgress(state, activeTypo.id, u);
+    const status = unitStatus(done, total);
+    if (filter === 'all') return true;
+    return status === filter;
+  });
+
+  const typoProg = typoProgress(state, activeTypo.id, activeTypo.units);
+  const typoPct = typoProg.total === 0 ? 0 : Math.round((typoProg.done / typoProg.total) * 100);
+
+  const counts = (() => {
+    const out = { all: activeTypo.units.length, todo: 0, inprogress: 0, done: 0 };
+    for (const u of activeTypo.units) {
+      const { done, total } = unitProgress(state, activeTypo.id, u);
+      out[unitStatus(done, total)] += 1;
+    }
+    return out;
+  })();
+
+  return (
+    <div className="min-h-full flex flex-col">
+      <header className="sticky top-0 z-20 bg-blue-800 text-white shadow-lg">
+        <div className="px-4 pt-3 pb-2">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={onBack}
+              className="bg-blue-900 hover:bg-blue-950 text-white text-sm font-semibold px-3 py-2 rounded-lg shadow active:scale-95 flex-shrink-0"
+            >
+              ←
+            </button>
+            <div className="flex-1 min-w-0 px-2">
+              <h1 className="text-base font-bold leading-tight truncate text-center">
+                {activeTypo.label}
+              </h1>
+              <p className="text-[11px] text-blue-100 text-center">
+                {user} · {role === 'admin' ? 'lecture seule' : 'contrôle'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {!readOnly && (
+                <button
+                  onClick={onSave}
+                  className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold text-sm px-3 py-2 rounded-lg shadow active:scale-95 flex items-center gap-1"
+                  title="Sauvegarder le contrôle signé"
+                >
+                  <span aria-hidden>💾</span>
+                  <span className="hidden sm:inline">Sauver</span>
+                </button>
+              )}
+              <button
+                onClick={onExportCSV}
+                className="bg-blue-900 hover:bg-blue-950 text-white text-sm px-3 py-2 rounded-lg shadow active:scale-95"
+                title="Exporter CSV"
+              >
+                ⤓
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-3 bg-blue-900/40 rounded-lg p-2">
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <span>{activeTypo.label}</span>
+              <span>
+                {typoProg.done}/{typoProg.total} · {typoPct}%
+              </span>
+            </div>
+            <div className="mt-1 w-full bg-blue-950/60 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-green-400 h-2 transition-all duration-300"
+                style={{ width: `${typoPct}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="sticky top-[110px] z-10 bg-slate-100 border-b border-slate-200 px-3 py-2 overflow-x-auto">
+        <div className="flex gap-2">
+          {FILTERS.map((f) => {
+            const isActive = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setFilter(f.id)}
+                className={`whitespace-nowrap px-3 py-2 rounded-full text-sm font-semibold border-2 transition-colors ${
+                  isActive
+                    ? 'bg-blue-800 text-white border-blue-800'
+                    : 'bg-white text-slate-700 border-slate-300 active:bg-slate-100'
+                }`}
+              >
+                {f.label}{' '}
+                <span
+                  className={`ml-1 inline-block min-w-[22px] text-xs px-1.5 py-0.5 rounded-full ${
+                    isActive ? 'bg-white/20' : 'bg-slate-200 text-slate-700'
+                  }`}
+                >
+                  {counts[f.id]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <main className="flex-1 px-3 py-3 pb-24 space-y-3">
+        {filteredUnits.length === 0 ? (
+          <div className="text-center text-slate-500 py-12">
+            <div className="text-4xl mb-2">∅</div>
+            <p className="font-semibold">Aucune unité dans ce filtre</p>
+            <p className="text-sm mt-1">Essayez "Tout"</p>
+          </div>
+        ) : (
+          filteredUnits.map((unitId) => (
+            <UnitCard
+              key={unitId}
+              typoId={activeTypo.id}
+              unitId={unitId}
+              state={state}
+              isOpen={openUnitId === unitId}
+              onToggleOpen={() => setOpenUnitId((prev) => (prev === unitId ? null : unitId))}
+              onToggleItem={(lotId, itemKey) => onToggleItem(activeTypo.id, unitId, lotId, itemKey)}
+              readOnly={readOnly}
+              photosKey={photosKey}
+            />
+          ))
+        )}
+      </main>
+
+      <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 py-2 text-center text-xs text-slate-500">
+        {filteredUnits.length} / {activeTypo.units.length} unités affichées
+      </footer>
+    </div>
+  );
+}
+
 // ---------- App ----------
 
 export default function App() {
-  const [user, setUser] = useState(() => localStorage.getItem(AUTH_KEY) || null);
+  const [auth, setAuth] = useState(() => loadAuth());
   const [state, setState] = useState(() => loadState());
-  const [activeTypoId, setActiveTypoId] = useState(TYPOLOGIES[0].id);
-  const [openUnitId, setOpenUnitId] = useState(null);
-  const [filter, setFilter] = useState('all');
-  const [sendOpen, setSendOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [view, setView] = useState({ type: 'home' });
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [toast, setToast] = useState(null);
+  // Bump pour forcer le refresh des PhotosSection après save (photos draft vidées)
+  const [photosKey, setPhotosKey] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Migrations au 1er chargement
   useEffect(() => {
-    runMigrationIfNeeded();
+    runV2MigrationIfNeeded();
     runV21KeyRemapIfNeeded();
   }, []);
 
@@ -363,10 +531,11 @@ export default function App() {
     saveState(state);
   }, [state]);
 
-  const activeTypo = useMemo(
-    () => TYPOLOGIES.find((t) => t.id === activeTypoId),
-    [activeTypoId]
-  );
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const toggleItem = useCallback((typoId, unitId, lotId, itemKey) => {
     setState((prev) => {
@@ -381,18 +550,6 @@ export default function App() {
       return next;
     });
   }, []);
-
-  const filteredUnits = useMemo(() => {
-    if (!activeTypo) return [];
-    return activeTypo.units.filter((u) => {
-      const { done, total } = unitProgress(state, activeTypo.id, u);
-      const status = unitStatus(done, total);
-      if (filter === 'all') return true;
-      return status === filter;
-    });
-  }, [activeTypo, state, filter]);
-
-  // ---------- Export CSV ----------
 
   const exportCSV = useCallback(() => {
     const rows = [['Typologie', 'Unité', 'Lot', 'Groupe', 'Élément', 'État']];
@@ -428,242 +585,94 @@ export default function App() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setMenuOpen(false);
   }, [state]);
-
-  const resetAll = useCallback(async () => {
-    if (
-      window.confirm(
-        'Réinitialiser toutes les données du chantier ?\n\nCela efface les cases cochées ET les photos.\nCette action est irréversible.'
-      )
-    ) {
-      setState({});
-      setOpenUnitId(null);
-      try {
-        await clearAllPhotos();
-      } catch (e) {
-        console.warn('Échec de la suppression des photos IDB', e);
-      }
-    }
-    setMenuOpen(false);
-  }, []);
 
   const logout = useCallback(() => {
     if (window.confirm('Se déconnecter ?')) {
       localStorage.removeItem(AUTH_KEY);
-      setUser(null);
+      setAuth(null);
+      setView({ type: 'home' });
     }
-    setMenuOpen(false);
+  }, []);
+
+  const handleSaved = useCallback((snap) => {
+    setSaveOpen(false);
+    setToast(`Contrôle #${snap.id} enregistré le ${new Date(snap.createdAt).toLocaleString('fr-FR')}.`);
+    // Refresh photos sections (draft est maintenant vide)
+    setPhotosKey((k) => k + 1);
+    setRefreshKey((k) => k + 1);
   }, []);
 
   // ---------- Login gate ----------
 
-  if (!user) {
+  if (!auth) {
     return (
       <Login
-        onLogin={(u) => {
-          localStorage.setItem(AUTH_KEY, u);
-          setUser(u);
+        onLogin={(username, role) => {
+          const a = { username, role };
+          localStorage.setItem(AUTH_KEY, JSON.stringify(a));
+          setAuth(a);
+          setView({ type: 'home' });
         }}
       />
     );
   }
 
-  const typoProg = typoProgress(state, activeTypo.id, activeTypo.units);
-  const typoPct = typoProg.total === 0 ? 0 : Math.round((typoProg.done / typoProg.total) * 100);
+  // ---------- Routes ----------
 
-  const counts = (() => {
-    const out = { all: activeTypo.units.length, todo: 0, inprogress: 0, done: 0 };
-    for (const u of activeTypo.units) {
-      const { done, total } = unitProgress(state, activeTypo.id, u);
-      out[unitStatus(done, total)] += 1;
-    }
-    return out;
-  })();
+  if (view.type === 'history') {
+    return <HistoryView onClose={() => setView({ type: 'home' })} />;
+  }
+
+  if (view.type === 'home') {
+    return (
+      <>
+        <Home
+          user={auth.username}
+          role={auth.role}
+          refreshKey={refreshKey}
+          onSelectTypology={(typoId) => setView({ type: 'typology', typoId })}
+          onOpenHistory={() => setView({ type: 'history' })}
+          onLogout={logout}
+        />
+        {toast && (
+          <div className="fixed bottom-20 inset-x-0 px-4 z-50">
+            <div className="mx-auto max-w-md bg-green-700 text-white font-semibold px-4 py-3 rounded-lg shadow-2xl">
+              ✓ {toast}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
-    <div className="min-h-full flex flex-col">
-      {/* HEADER FIXE */}
-      <header className="sticky top-0 z-20 bg-blue-800 text-white shadow-lg">
-        <div className="px-4 pt-3 pb-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="bg-white rounded-lg px-2 py-1.5 shadow-sm flex-shrink-0">
-                <img
-                  src="logo.svg"
-                  alt="THE STAY"
-                  className="h-7 w-auto block"
-                  draggable="false"
-                />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-base font-bold leading-tight truncate">Suivi Chantier</h1>
-                <p className="text-[11px] text-blue-100">9 lots · réception travaux</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 flex-shrink-0 relative">
-              <button
-                onClick={() => setSendOpen(true)}
-                className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold text-sm px-3 py-2 rounded-lg shadow active:scale-95 flex items-center gap-1"
-                title="Envoyer rapport PDF"
-              >
-                <span aria-hidden>📤</span>
-                <span className="hidden xs:inline">Envoyer</span>
-              </button>
-              <button
-                onClick={() => setMenuOpen((v) => !v)}
-                className="bg-blue-900 hover:bg-blue-950 text-white text-xl px-3 py-2 rounded-lg shadow active:scale-95"
-                aria-label="Menu"
-                aria-expanded={menuOpen}
-              >
-                ⋮
-              </button>
-
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 z-40 bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-200 w-56 overflow-hidden">
-                    <div className="px-3 py-2 border-b border-slate-200 bg-slate-50">
-                      <p className="text-xs text-slate-500">Connecté en tant que</p>
-                      <p className="font-bold text-sm">{user}</p>
-                    </div>
-                    <button
-                      onClick={exportCSV}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-100 active:bg-slate-200 text-sm font-semibold flex items-center gap-2"
-                    >
-                      <span>⤓</span> Exporter CSV
-                    </button>
-                    <button
-                      onClick={resetAll}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-100 active:bg-slate-200 text-sm font-semibold text-red-700 flex items-center gap-2 border-t border-slate-100"
-                    >
-                      <span>↺</span> Réinitialiser
-                    </button>
-                    <button
-                      onClick={logout}
-                      className="w-full text-left px-4 py-3 hover:bg-slate-100 active:bg-slate-200 text-sm font-semibold flex items-center gap-2 border-t border-slate-100"
-                    >
-                      <span>⏻</span> Déconnexion
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Progression globale typologie */}
-          <div className="mt-3 bg-blue-900/40 rounded-lg p-2">
-            <div className="flex items-center justify-between text-sm font-semibold">
-              <span>{activeTypo.label}</span>
-              <span>
-                {typoProg.done}/{typoProg.total} · {typoPct}%
-              </span>
-            </div>
-            <div className="mt-1 w-full bg-blue-950/60 rounded-full h-2 overflow-hidden">
-              <div
-                className="bg-green-400 h-2 transition-all duration-300"
-                style={{ width: `${typoPct}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* TABS TYPOLOGIES */}
-        <nav className="flex border-t border-blue-700 bg-blue-800 overflow-x-auto">
-          {TYPOLOGIES.map((t) => {
-            const tp = typoProgress(state, t.id, t.units);
-            const tpct = tp.total === 0 ? 0 : Math.round((tp.done / tp.total) * 100);
-            const isActive = t.id === activeTypoId;
-            return (
-              <button
-                key={t.id}
-                onClick={() => {
-                  setActiveTypoId(t.id);
-                  setOpenUnitId(null);
-                }}
-                className={`flex-1 min-w-[120px] py-3 px-2 text-sm font-bold border-b-4 transition-colors ${
-                  isActive
-                    ? 'border-white bg-blue-700 text-white'
-                    : 'border-transparent text-blue-100 active:bg-blue-700'
-                }`}
-              >
-                <div className="leading-tight">{t.short}</div>
-                <div className="text-[11px] font-normal opacity-90 mt-0.5">
-                  {t.units.length} unités · {tpct}%
-                </div>
-              </button>
-            );
-          })}
-        </nav>
-      </header>
-
-      {/* BARRE DE FILTRES */}
-      <div className="sticky top-[148px] z-10 bg-slate-100 border-b border-slate-200 px-3 py-2 overflow-x-auto">
-        <div className="flex gap-2">
-          {FILTERS.map((f) => {
-            const isActive = filter === f.id;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setFilter(f.id)}
-                className={`whitespace-nowrap px-3 py-2 rounded-full text-sm font-semibold border-2 transition-colors ${
-                  isActive
-                    ? 'bg-blue-800 text-white border-blue-800'
-                    : 'bg-white text-slate-700 border-slate-300 active:bg-slate-100'
-                }`}
-              >
-                {f.label}{' '}
-                <span
-                  className={`ml-1 inline-block min-w-[22px] text-xs px-1.5 py-0.5 rounded-full ${
-                    isActive ? 'bg-white/20' : 'bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  {counts[f.id]}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* LISTE DES UNITÉS */}
-      <main className="flex-1 px-3 py-3 pb-24 space-y-3">
-        {filteredUnits.length === 0 ? (
-          <div className="text-center text-slate-500 py-12">
-            <div className="text-4xl mb-2">∅</div>
-            <p className="font-semibold">Aucune unité dans ce filtre</p>
-            <p className="text-sm mt-1">Essayez "Tout"</p>
-          </div>
-        ) : (
-          filteredUnits.map((unitId) => (
-            <UnitCard
-              key={unitId}
-              typoId={activeTypo.id}
-              unitId={unitId}
-              state={state}
-              isOpen={openUnitId === unitId}
-              onToggleOpen={() => setOpenUnitId((prev) => (prev === unitId ? null : unitId))}
-              onToggleItem={(lotId, itemKey) =>
-                toggleItem(activeTypo.id, unitId, lotId, itemKey)
-              }
-            />
-          ))
-        )}
-      </main>
-
-      {/* FOOTER */}
-      <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 py-2 text-center text-xs text-slate-500">
-        Données enregistrées localement · {filteredUnits.length} / {activeTypo.units.length} unités affichées
-      </footer>
-
-      {/* MODAL ENVOI */}
-      <SendModal
-        open={sendOpen}
-        onClose={() => setSendOpen(false)}
+    <>
+      <TypologyView
+        user={auth.username}
+        role={auth.role}
+        typoId={view.typoId}
         state={state}
-        defaultTechnicianName={user}
+        onToggleItem={toggleItem}
+        onBack={() => setView({ type: 'home' })}
+        onExportCSV={exportCSV}
+        onSave={() => setSaveOpen(true)}
+        photosKey={photosKey}
       />
-    </div>
+      <SaveModal
+        open={saveOpen}
+        onClose={() => setSaveOpen(false)}
+        state={state}
+        technicianName={auth.username}
+        onSaved={handleSaved}
+      />
+      {toast && (
+        <div className="fixed bottom-20 inset-x-0 px-4 z-50">
+          <div className="mx-auto max-w-md bg-green-700 text-white font-semibold px-4 py-3 rounded-lg shadow-2xl">
+            ✓ {toast}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

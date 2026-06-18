@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import SignatureCanvas from 'react-signature-canvas';
+import { useEffect, useMemo, useState } from 'react';
 import { generateReport } from './pdf.js';
 import { countPhotosBySection } from './storage.js';
-import { LOTS } from './data.js';
+import { LOTS, flatItemsForLot, TYPOLOGIES } from './data.js';
 
-const TECH_NAME_KEY = 'suivi-chantier-tech-name';
 const SELECTED_LOTS_KEY = 'suivi-chantier-last-selected-lots';
 
 async function shareOrDownload(files, title) {
@@ -46,9 +44,28 @@ function loadSelectedLots() {
   }
 }
 
-export default function SendModal({ open, onClose, state, defaultTechnicianName }) {
-  const sigRef = useRef(null);
-  const [tech, setTech] = useState('');
+// Compte uniquement les lots qui ont des items pour au moins une typologie ET
+// pour lesquels au moins un item est coché — pour aider l'admin à choisir
+// quels rapports valent la peine d'être générés.
+function lotsCheckedCount(state) {
+  const counts = {};
+  for (const lot of LOTS) counts[lot.id] = 0;
+  for (const t of TYPOLOGIES) {
+    for (const lot of LOTS) {
+      const items = flatItemsForLot(t.id, lot.id);
+      if (!items.length) continue;
+      for (const u of t.units) {
+        const us = state?.[t.id]?.[u]?.[lot.id] || {};
+        for (const it of items) {
+          if (us[it.key]) counts[lot.id] += 1;
+        }
+      }
+    }
+  }
+  return counts;
+}
+
+export default function SendModal({ open, onClose, snapshot }) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
@@ -61,46 +78,26 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
   const [progress, setProgress] = useState({ current: 0, total: 0, lot: null });
 
   useEffect(() => {
-    if (open) {
-      const stored = localStorage.getItem(TECH_NAME_KEY);
-      setTech(stored || defaultTechnicianName || '');
-      setStatus(null);
-      setError(null);
-      setProgress({ current: 0, total: 0, lot: null });
-      setTimeout(() => sigRef.current?.clear?.(), 50);
-      (async () => {
-        try {
-          const counts = {};
-          await Promise.all(
-            LOTS.map(async (l) => {
-              counts[l.id] = await countPhotosBySection(l.id);
-            })
-          );
-          setPhotoCounts(counts);
-        } catch (e) {
-          console.warn('Compteur photos KO', e);
-        }
-      })();
-    }
-  }, [open, defaultTechnicianName]);
+    if (!open || !snapshot) return;
+    setStatus(null);
+    setError(null);
+    setProgress({ current: 0, total: 0, lot: null });
+    (async () => {
+      try {
+        const counts = {};
+        await Promise.all(
+          LOTS.map(async (l) => {
+            counts[l.id] = await countPhotosBySection(l.id, snapshot.id);
+          })
+        );
+        setPhotoCounts(counts);
+      } catch (e) {
+        console.warn('Compteur photos KO', e);
+      }
+    })();
+  }, [open, snapshot]);
 
-  useEffect(() => {
-    if (!open) return;
-    const resize = () => {
-      const canvas = sigRef.current?.getCanvas?.();
-      if (!canvas) return;
-      const parent = canvas.parentElement;
-      if (!parent) return;
-      const ratio = Math.max(window.devicePixelRatio || 1, 1);
-      canvas.width = parent.clientWidth * ratio;
-      canvas.height = parent.clientHeight * ratio;
-      canvas.getContext('2d').scale(ratio, ratio);
-      sigRef.current.clear();
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [open]);
+  const checkedByLot = useMemo(() => (snapshot ? lotsCheckedCount(snapshot.state) : {}), [snapshot]);
 
   const allSelected = selectedLots.length === LOTS.length;
   const noneSelected = selectedLots.length === 0;
@@ -111,40 +108,26 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
     );
   };
 
-  const toggleAll = () => {
-    setSelectedLots(allSelected ? [] : LOTS.map((l) => l.id));
-  };
+  const toggleAll = () => setSelectedLots(allSelected ? [] : LOTS.map((l) => l.id));
 
   const totalPhotosForSelected = useMemo(() => {
     return selectedLots.reduce((acc, id) => acc + (photoCounts[id] || 0), 0);
   }, [selectedLots, photoCounts]);
 
-  if (!open) return null;
+  if (!open || !snapshot) return null;
 
   const handleGenerate = async () => {
     setError(null);
     setStatus(null);
 
-    const name = tech.trim();
-    if (!name) {
-      setError('Veuillez saisir votre nom.');
-      return;
-    }
-    const empty = sigRef.current?.isEmpty?.() ?? true;
-    if (empty) {
-      setError('Veuillez signer dans le cadre prévu.');
-      return;
-    }
     if (selectedLots.length === 0) {
-      setError('Sélectionnez au moins un lot à générer.');
+      setError('Sélectionnez au moins un lot.');
       return;
     }
 
     setBusy(true);
     try {
-      localStorage.setItem(TECH_NAME_KEY, name);
       localStorage.setItem(SELECTED_LOTS_KEY, JSON.stringify(selectedLots));
-      const signatureDataUrl = sigRef.current.getTrimmedCanvas().toDataURL('image/png');
 
       const orderedSelection = LOTS.filter((l) => selectedLots.includes(l.id));
       setProgress({ current: 0, total: orderedSelection.length, lot: null });
@@ -155,10 +138,11 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
         setProgress({ current: i, total: orderedSelection.length, lot: lot.label });
         const { blob, fileName } = await generateReport({
           lotId: lot.id,
-          state,
-          technicianName: name,
-          signatureDataUrl,
-          includePhotos
+          state: snapshot.state,
+          technicianName: snapshot.technicianName,
+          signatureDataUrl: snapshot.signatureDataUrl,
+          includePhotos,
+          sessionId: snapshot.id
         });
         files.push(new File([blob], fileName, { type: 'application/pdf' }));
       }
@@ -189,13 +173,21 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
     ? 'Sélectionnez au moins un lot'
     : `Générer ${selectedLots.length} rapport${selectedLots.length > 1 ? 's' : ''}`;
 
+  const snapshotDateStr = new Date(snapshot.createdAt).toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md shadow-2xl">
         <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Envoyer les rapports</h2>
-            <p className="text-xs text-slate-500">PDF par lot avec signature et date</p>
+            <h2 className="text-lg font-bold text-slate-900">Exporter les rapports</h2>
+            <p className="text-xs text-slate-500">À partir d'un contrôle enregistré</p>
           </div>
           <button
             onClick={onClose}
@@ -208,49 +200,27 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
         </div>
 
         <div className="p-4 space-y-4 max-h-[78vh] overflow-y-auto">
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1">
-              Nom du technicien
-            </label>
-            <input
-              type="text"
-              value={tech}
-              onChange={(e) => setTech(e.target.value)}
-              autoCapitalize="words"
-              className="w-full px-3 py-3 text-base border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none"
-              placeholder="Prénom et nom"
-            />
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-semibold text-slate-700">Signature</label>
-              <button
-                type="button"
-                onClick={() => sigRef.current?.clear?.()}
-                className="text-xs font-semibold text-blue-700 underline"
-                disabled={busy}
-              >
-                Effacer
-              </button>
-            </div>
-            <div className="w-full h-40 border-2 border-dashed border-slate-400 rounded-lg bg-slate-50 overflow-hidden touch-none">
-              <SignatureCanvas
-                ref={sigRef}
-                penColor="#0f172a"
-                canvasProps={{
-                  className: 'w-full h-full',
-                  style: { touchAction: 'none' }
-                }}
-              />
-            </div>
-            <p className="text-xs text-slate-500 mt-1">Signez avec le doigt ou un stylet.</p>
+          {/* Bandeau snapshot info */}
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 text-sm">
+            <p className="font-bold text-blue-900">Contrôle du {snapshotDateStr}</p>
+            <p className="text-xs text-slate-700 mt-0.5">
+              Technicien : <span className="font-bold">{snapshot.technicianName}</span>
+            </p>
+            {snapshot.signatureDataUrl && (
+              <div className="mt-2 inline-block bg-white border border-slate-300 rounded p-1">
+                <img
+                  src={snapshot.signatureDataUrl}
+                  alt="Signature"
+                  className="h-12 w-auto"
+                />
+              </div>
+            )}
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-semibold text-slate-700">
-                Lots à générer ({selectedLots.length}/{LOTS.length})
+                Lots à exporter ({selectedLots.length}/{LOTS.length})
               </p>
               <button
                 type="button"
@@ -265,6 +235,7 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
               {LOTS.map((lot) => {
                 const checked = selectedLots.includes(lot.id);
                 const photoN = photoCounts[lot.id] || 0;
+                const lotChecked = checkedByLot[lot.id] || 0;
                 return (
                   <li key={lot.id}>
                     <label className="flex items-center gap-3 px-3 py-3 rounded-lg bg-slate-50 hover:bg-slate-100 active:bg-slate-200 cursor-pointer border border-slate-200">
@@ -279,9 +250,10 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
                         {lot.icon}
                       </span>
                       <span className="flex-1 text-sm font-bold text-slate-900">{lot.label}</span>
-                      {photoN > 0 && (
-                        <span className="text-xs text-slate-500 flex-shrink-0">📷 {photoN}</span>
-                      )}
+                      <span className="text-xs text-slate-500 flex-shrink-0 flex flex-col items-end">
+                        <span>{lotChecked} cochés</span>
+                        {photoN > 0 && <span>📷 {photoN}</span>}
+                      </span>
                     </label>
                   </li>
                 );
@@ -328,8 +300,7 @@ export default function SendModal({ open, onClose, state, defaultTechnicianName 
           </button>
 
           <p className="text-[11px] text-slate-500 text-center">
-            Sur smartphone, la fenêtre de partage s'ouvre automatiquement (WhatsApp, mail, Drive…).
-            Sur PC, les fichiers sont téléchargés.
+            Les PDF utilisent la signature et la date du contrôle sélectionné.
           </p>
         </div>
       </div>

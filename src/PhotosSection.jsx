@@ -3,7 +3,7 @@ import { addPhoto, deletePhoto, getPhotosForUnit } from './storage.js';
 import { compressImage, formatBytes } from './photoUtils.js';
 
 // Génère et révoque proprement les object URLs pour l'affichage des miniatures
-function usePhotosForUnit(typoId, unitId, section, enabled) {
+function usePhotosForUnit(typoId, unitId, section, enabled, sessionId) {
   const [items, setItems] = useState([]); // [{id, url, blob, createdAt}]
   const urlsRef = useRef([]);
 
@@ -19,32 +19,42 @@ function usePhotosForUnit(typoId, unitId, section, enabled) {
   const refresh = useCallback(async () => {
     if (!enabled) return;
     revokeAll();
-    const list = await getPhotosForUnit(typoId, unitId, section);
+    const list = await getPhotosForUnit(typoId, unitId, section, sessionId);
     const enriched = list.map((p) => {
       const url = URL.createObjectURL(p.blob);
       urlsRef.current.push(url);
       return { id: p.id, blob: p.blob, url, createdAt: p.createdAt };
     });
     setItems(enriched);
-  }, [typoId, unitId, section, enabled]);
+  }, [typoId, unitId, section, enabled, sessionId]);
 
   useEffect(() => {
     if (enabled) refresh();
     return revokeAll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typoId, unitId, section, enabled]);
+  }, [typoId, unitId, section, enabled, sessionId]);
 
   return { items, refresh };
 }
 
-export default function PhotosSection({ typoId, unitId, section, enabled, onChange, labelOverride }) {
+export default function PhotosSection({
+  typoId,
+  unitId,
+  section,
+  enabled,
+  onChange,
+  labelOverride,
+  sessionId = 'draft',
+  readOnly = false
+}) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [lightbox, setLightbox] = useState(null); // {id, url}
-  const { items, refresh } = usePhotosForUnit(typoId, unitId, section, enabled);
+  const { items, refresh } = usePhotosForUnit(typoId, unitId, section, enabled, sessionId);
 
   const onFiles = async (fileList) => {
+    if (readOnly) return;
     if (!fileList || !fileList.length) return;
     setError(null);
     setBusy(true);
@@ -57,7 +67,7 @@ export default function PhotosSection({ typoId, unitId, section, enabled, onChan
           quality: 0.82
         });
         if (!compressed) continue;
-        await addPhoto({ typoId, unitId, section, blob: compressed });
+        await addPhoto({ typoId, unitId, section, blob: compressed, sessionId });
       }
       await refresh();
       onChange?.();
@@ -71,6 +81,7 @@ export default function PhotosSection({ typoId, unitId, section, enabled, onChan
   };
 
   const handleDelete = async (id) => {
+    if (readOnly) return;
     if (!window.confirm('Supprimer cette photo ?')) return;
     await deletePhoto(id);
     setLightbox(null);
@@ -85,15 +96,17 @@ export default function PhotosSection({ typoId, unitId, section, enabled, onChan
           {labelOverride || `Photos ${section}`}{' '}
           <span className="text-slate-400">({items.length})</span>
         </h5>
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={busy}
-          className="bg-blue-700 hover:bg-blue-800 active:bg-blue-900 disabled:opacity-60 text-white text-sm font-bold px-3 py-2 rounded-lg shadow flex items-center gap-1"
-        >
-          <span aria-hidden>📷</span>
-          {busy ? '...' : 'Photo'}
-        </button>
+        {!readOnly && (
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={busy}
+            className="bg-blue-700 hover:bg-blue-800 active:bg-blue-900 disabled:opacity-60 text-white text-sm font-bold px-3 py-2 rounded-lg shadow flex items-center gap-1"
+          >
+            <span aria-hidden>📷</span>
+            {busy ? '...' : 'Photo'}
+          </button>
+        )}
         <input
           ref={inputRef}
           type="file"
@@ -147,15 +160,17 @@ export default function PhotosSection({ typoId, unitId, section, enabled, onChan
             onClick={(e) => e.stopPropagation()}
           />
           <div className="mt-4 flex gap-2 flex-wrap justify-center">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(lightbox.id);
-              }}
-              className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold px-4 py-3 rounded-lg shadow"
-            >
-              🗑 Supprimer
-            </button>
+            {!readOnly && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(lightbox.id);
+                }}
+                className="bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-bold px-4 py-3 rounded-lg shadow"
+              >
+                🗑 Supprimer
+              </button>
+            )}
             <button
               onClick={() => setLightbox(null)}
               className="bg-white text-slate-900 font-bold px-4 py-3 rounded-lg shadow"
