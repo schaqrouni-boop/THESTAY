@@ -15,6 +15,7 @@ import { clearAllPhotos } from './storage.js';
 const STORAGE_KEY = 'suivi-chantier-v2';
 const AUTH_KEY = 'suivi-chantier-auth';
 const MIGRATION_FLAG = 'suivi-chantier-migrated-v2';
+const MIGRATION_V21_FLAG = 'suivi-chantier-migrated-v21';
 
 // ---------- Migration v1 → v2 (au 1er chargement) ----------
 
@@ -29,6 +30,67 @@ async function runMigrationIfNeeded() {
     console.warn('Migration : suppression photos KO', e);
   }
   localStorage.setItem(MIGRATION_FLAG, '1');
+}
+
+// ---------- Migration v2 → v2.1 : items boiserie regroupés sous "Quincaillerie" ----------
+// Les clés d'item passent de "Butoirs portes" à "Quincaillerie — Butoirs portes".
+// Cette fonction remap les clés en localStorage pour conserver l'avancement coché.
+
+const QUINCAILLERIE_REMAP = {
+  studio: {
+    boiserie_bibancom: {
+      'Poignée Digitale': 'Quincaillerie — Poignée Digitale',
+      'Canon Bouton SDB': 'Quincaillerie — Canon Bouton SDB',
+      'Butoirs portes': 'Quincaillerie — Butoirs portes',
+      'Poignées portes intérieur x 2': 'Quincaillerie — Poignées portes intérieur x 2'
+    }
+  },
+  appt2c: {
+    boiserie_bibancom: {
+      'Butoirs portes x 5': 'Quincaillerie — Butoirs portes x 5',
+      'Poignées portes intérieur x 5': 'Quincaillerie — Poignées portes intérieur x 5'
+    }
+  },
+  appt3c: {
+    boiserie_bibancom: {
+      'Butoirs portes x 7': 'Quincaillerie — Butoirs portes x 7',
+      'Poignées portes intérieur x 7': 'Quincaillerie — Poignées portes intérieur x 7'
+    }
+  }
+};
+
+function runV21KeyRemapIfNeeded() {
+  if (localStorage.getItem(MIGRATION_V21_FLAG) === '1') return;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const state = JSON.parse(raw);
+      if (state && typeof state === 'object') {
+        for (const [typoId, typoMap] of Object.entries(QUINCAILLERIE_REMAP)) {
+          const typoState = state[typoId];
+          if (!typoState) continue;
+          for (const unitId of Object.keys(typoState)) {
+            const unitState = typoState[unitId];
+            if (!unitState) continue;
+            for (const [lotId, keyMap] of Object.entries(typoMap)) {
+              const lotState = unitState[lotId];
+              if (!lotState) continue;
+              for (const [oldKey, newKey] of Object.entries(keyMap)) {
+                if (oldKey in lotState) {
+                  lotState[newKey] = lotState[oldKey];
+                  delete lotState[oldKey];
+                }
+              }
+            }
+          }
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      }
+    }
+  } catch (e) {
+    console.warn('Migration v2.1 : remap clés KO', e);
+  }
+  localStorage.setItem(MIGRATION_V21_FLAG, '1');
 }
 
 // ---------- Persistance ----------
@@ -291,9 +353,10 @@ export default function App() {
   const [sendOpen, setSendOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Migration v1 → v2 au 1er chargement
+  // Migrations au 1er chargement
   useEffect(() => {
     runMigrationIfNeeded();
+    runV21KeyRemapIfNeeded();
   }, []);
 
   useEffect(() => {

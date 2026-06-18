@@ -65,10 +65,15 @@ export const LOT_ITEMS = {
       'Dressing portes',
       'Dressing LEDs',
       'Dressing étagères et tiroirs',
-      'Poignée Digitale',
-      'Canon Bouton SDB',
-      'Butoirs portes',
-      'Poignées portes intérieur x 2'
+      {
+        group: 'Quincaillerie',
+        items: [
+          'Poignée Digitale',
+          'Canon Bouton SDB',
+          'Butoirs portes',
+          'Poignées portes intérieur x 2'
+        ]
+      }
     ],
     parquet: PARQUET,
     electricien_sobimel: ELECTRICIEN,
@@ -120,8 +125,10 @@ export const LOT_ITEMS = {
         items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
       },
       { group: 'Cuisine', items: ['Porte'] },
-      'Butoirs portes x 5',
-      'Poignées portes intérieur x 5'
+      {
+        group: 'Quincaillerie',
+        items: ['Butoirs portes x 5', 'Poignées portes intérieur x 5']
+      }
     ],
     parquet: PARQUET,
     electricien_sobimel: ELECTRICIEN,
@@ -236,8 +243,10 @@ export const LOT_ITEMS = {
         items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
       },
       { group: 'Cuisine', items: ['Porte'] },
-      'Butoirs portes x 7',
-      'Poignées portes intérieur x 7'
+      {
+        group: 'Quincaillerie',
+        items: ['Butoirs portes x 7', 'Poignées portes intérieur x 7']
+      }
     ],
     parquet: PARQUET,
     electricien_sobimel: ELECTRICIEN,
