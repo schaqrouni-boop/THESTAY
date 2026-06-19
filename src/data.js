@@ -33,15 +33,20 @@ const CUISINE_WOODYMAR = [
 
 const PARQUET = ['Parquet', 'Plinthe et Cornière'];
 
-const ELECTRICIEN = [
-  'Interrupteurs',
-  'Caches',
-  'Tableau Électrique',
-  'Spots',
-  'Vidéophone',
-  'LED Niches SDB',
-  'Numéro Porte'
-];
+// Génère la liste Électricien Sobimel pour studio/2C/3C en insérant des items
+// Dressing LEDs spécifiques juste après 'LED Niches SDB'.
+function electricienFor(dressingLeds = []) {
+  return [
+    'Interrupteurs',
+    'Caches',
+    'Tableau Électrique',
+    'Spots',
+    'Vidéophone',
+    'LED Niches SDB',
+    ...dressingLeds,
+    'Numéro Porte'
+  ];
+}
 
 const CLIMATISATION = [
   'Pose Commande',
@@ -63,7 +68,6 @@ export const LOT_ITEMS = {
       'Porte Chambre',
       'Dressing chambranle et plinthe',
       'Dressing portes',
-      'Dressing LEDs',
       'Dressing étagères et tiroirs',
       {
         group: 'Quincaillerie',
@@ -76,7 +80,7 @@ export const LOT_ITEMS = {
       }
     ],
     parquet: PARQUET,
-    electricien_sobimel: ELECTRICIEN,
+    electricien_sobimel: electricienFor(['Dressing LEDs']),
     plomberie_climasec: [
       'Pose Chauffe-Eau',
       'Pose Mitigeur',
@@ -118,11 +122,11 @@ export const LOT_ITEMS = {
       },
       {
         group: 'Chambre Enfant',
-        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
+        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
       {
         group: 'Suite Parentale',
-        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
+        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
       { group: 'Cuisine', items: ['Porte'] },
       {
@@ -131,7 +135,10 @@ export const LOT_ITEMS = {
       }
     ],
     parquet: PARQUET,
-    electricien_sobimel: ELECTRICIEN,
+    electricien_sobimel: electricienFor([
+      'Dressing LEDs Chambre Enfant',
+      'Dressing LEDs Suite Parentale'
+    ]),
     plomberie_climasec: [
       'Pose Chauffe-Eau',
       'Pose Mitigeur Cuisine',
@@ -232,15 +239,15 @@ export const LOT_ITEMS = {
       },
       {
         group: 'Chambre Enfant 1',
-        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
+        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
       {
         group: 'Chambre Enfant 2',
-        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
+        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
       {
         group: 'Suite Parentale',
-        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs', 'Dressing LEDs']
+        items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
       { group: 'Cuisine', items: ['Porte'] },
       {
@@ -249,7 +256,11 @@ export const LOT_ITEMS = {
       }
     ],
     parquet: PARQUET,
-    electricien_sobimel: ELECTRICIEN,
+    electricien_sobimel: electricienFor([
+      'Dressing LEDs Chambre Enfant 1',
+      'Dressing LEDs Chambre Enfant 2',
+      'Dressing LEDs Suite Parentale'
+    ]),
     plomberie_climasec: [
       'Pose Chauffe-Eau',
       'Pose Mitigeur Cuisine',
