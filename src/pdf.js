@@ -277,7 +277,21 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
 
   const colGap = 6;
   const slotW = (pageW - marginX * 2 - colGap) / 2;
-  const slotH = 60;
+  const slotH = 56;
+  const captionH = 6;
+  const rowH = slotH + captionH;
+  const headingBarH = 9;
+
+  const drawHeadingBar = (text, suffix = '') => {
+    // Bandeau bleu pleine largeur avec libellé unité en blanc
+    doc.setFillColor(...PRIMARY);
+    doc.roundedRect(marginX, y, pageW - 2 * marginX, headingBarH, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.text(text + (suffix ? ' ' + suffix : ''), marginX + 4, y + 6.5);
+    y += headingBarH + 3;
+  };
 
   const newPage = async () => {
     doc.addPage();
@@ -288,25 +302,22 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
 
   for (const [key, items] of groups) {
     const [typoId, unitId] = key.split('|');
-    const heading = `${unitId} — ${typoLabel(typoId)}`;
+    const heading = `${unitId}  ·  ${typoLabel(typoId)}  ·  ${items.length} photo${items.length > 1 ? 's' : ''}`;
 
-    if (y + 8 > bottomLimit) await newPage();
+    // Saut de page si pas la place pour le bandeau + au moins une ligne de photos
+    if (y + headingBarH + rowH + 4 > bottomLimit) await newPage();
     if (!firstOnPage) y += 4;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...PRIMARY);
-    doc.text(heading, marginX, y);
-    y += 6;
+    drawHeadingBar(heading);
     firstOnPage = false;
 
     let col = 0;
+    let photoIndex = 0;
     for (let i = 0; i < items.length; i++) {
       const p = items[i];
       let dataUrl;
       let imgW;
       let imgH;
       try {
-        // p.url = signed URL Supabase Storage (cloud), p.blob = legacy (local IDB)
         if (p.url) {
           dataUrl = await fetchUrlToDataUrl(p.url);
         } else if (p.blob) {
@@ -326,19 +337,16 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
       const drawW = imgW * r;
       const drawH = imgH * r;
 
-      if (col === 0 && y + slotH > bottomLimit) {
+      // Saut de page si une nouvelle ligne ne tient pas
+      if (col === 0 && y + rowH > bottomLimit) {
         await newPage();
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(...PRIMARY);
-        doc.text(heading + ' (suite)', marginX, y);
-        y += 6;
-        firstOnPage = false;
+        drawHeadingBar(heading, '(suite)');
       }
 
       const slotX = marginX + col * (slotW + colGap);
       const slotY = y;
 
+      // Cadre photo
       doc.setDrawColor(...GRAY);
       doc.setFillColor(248, 250, 252);
       doc.roundedRect(slotX, slotY, slotW, slotH, 1.2, 1.2, 'FD');
@@ -350,15 +358,28 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
         console.warn('addImage failed', e);
       }
 
+      // Caption sous la photo : "S01 — photo 2/5"
+      photoIndex += 1;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...SLATE);
+      doc.text(
+        `${unitId} — photo ${photoIndex}/${items.length}`,
+        slotX + slotW / 2,
+        slotY + slotH + 4,
+        { align: 'center' }
+      );
+
       col += 1;
       if (col === 2) {
         col = 0;
-        y += slotH + 4;
+        y += rowH + 3;
       }
     }
     if (col !== 0) {
-      y += slotH + 4;
+      y += rowH + 3;
     }
+    y += 2;
   }
 }
 
