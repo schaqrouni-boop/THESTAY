@@ -55,7 +55,6 @@ export default function Login({ onLogin }) {
                 autoCapitalize="off"
                 autoCorrect="off"
                 spellCheck="false"
-                placeholder="Nabil ou Saad"
                 className="w-full px-4 py-3 text-base border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none"
                 required
                 disabled={busy}
