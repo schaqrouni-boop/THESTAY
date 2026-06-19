@@ -1,40 +1,32 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { addPhoto, deletePhoto, getPhotosForUnit } from './storage.js';
-import { compressImage, formatBytes } from './photoUtils.js';
+import { compressImage } from './photoUtils.js';
 
-// Génère et révoque proprement les object URLs pour l'affichage des miniatures
+// Charge les photos depuis Supabase (avec URL signée déjà attachée).
 function usePhotosForUnit(typoId, unitId, section, enabled, sessionId) {
-  const [items, setItems] = useState([]); // [{id, url, blob, createdAt}]
-  const urlsRef = useRef([]);
-
-  const revokeAll = () => {
-    for (const u of urlsRef.current) {
-      try {
-        URL.revokeObjectURL(u);
-      } catch {}
-    }
-    urlsRef.current = [];
-  };
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
-    revokeAll();
-    const list = await getPhotosForUnit(typoId, unitId, section, sessionId);
-    const enriched = list.map((p) => {
-      const url = URL.createObjectURL(p.blob);
-      urlsRef.current.push(url);
-      return { id: p.id, blob: p.blob, url, createdAt: p.createdAt };
-    });
-    setItems(enriched);
+    setLoading(true);
+    try {
+      const list = await getPhotosForUnit(typoId, unitId, section, sessionId);
+      setItems(list);
+    } catch (e) {
+      console.warn('Chargement photos KO', e);
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, [typoId, unitId, section, enabled, sessionId]);
 
   useEffect(() => {
     if (enabled) refresh();
-    return revokeAll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [typoId, unitId, section, enabled, sessionId]);
 
-  return { items, refresh };
+  return { items, refresh, loading };
 }
 
 export default function PhotosSection({
@@ -51,7 +43,7 @@ export default function PhotosSection({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [lightbox, setLightbox] = useState(null); // {id, url}
-  const { items, refresh } = usePhotosForUnit(typoId, unitId, section, enabled, sessionId);
+  const { items, refresh, loading } = usePhotosForUnit(typoId, unitId, section, enabled, sessionId);
 
   const onFiles = async (fileList) => {
     if (readOnly) return;
@@ -178,9 +170,7 @@ export default function PhotosSection({
               Fermer
             </button>
           </div>
-          <p className="text-white/70 text-xs mt-3">
-            Photo · {lightbox.blob ? formatBytes(lightbox.blob.size) : ''}
-          </p>
+          <p className="text-white/70 text-xs mt-3">Photo {lightbox.id}</p>
         </div>
       )}
     </div>

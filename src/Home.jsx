@@ -2,19 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { TYPOLOGIES, LOTS, flatItemsForLot } from './data.js';
 import { listSnapshots } from './storage.js';
 
-const STORAGE_KEY = 'suivi-chantier-v2';
-
-function readDraftState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 function typoProgress(state, typo) {
   let done = 0;
   let total = 0;
@@ -45,13 +32,11 @@ const ICONS = {
   couloirs: '🛗'
 };
 
-export default function Home({ user, role, onSelectTypology, onOpenHistory, onLogout, refreshKey }) {
-  const [state, setState] = useState(() => readDraftState());
+export default function Home({ user, role, state, onSelectTypology, onOpenHistory, onLogout, refreshKey }) {
   const [snapshotCount, setSnapshotCount] = useState(0);
   const [lastSnapshot, setLastSnapshot] = useState(null);
 
   useEffect(() => {
-    setState(readDraftState());
     (async () => {
       try {
         const list = await listSnapshots();

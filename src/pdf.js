@@ -12,6 +12,13 @@ import { TYPOLOGIES, LOTS, groupsForLot, flatItemsForLot } from './data.js';
 import { getPhotosBySection } from './storage.js';
 import { blobToDataURL, loadImageEl } from './photoUtils.js';
 
+async function fetchUrlToDataUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const blob = await res.blob();
+  return await blobToDataURL(blob);
+}
+
 const PRIMARY = [30, 64, 175];
 const SLATE = [71, 85, 105];
 const GREEN = [22, 163, 74];
@@ -299,7 +306,14 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
       let imgW;
       let imgH;
       try {
-        dataUrl = await blobToDataURL(p.blob);
+        // p.url = signed URL Supabase Storage (cloud), p.blob = legacy (local IDB)
+        if (p.url) {
+          dataUrl = await fetchUrlToDataUrl(p.url);
+        } else if (p.blob) {
+          dataUrl = await blobToDataURL(p.blob);
+        } else {
+          continue;
+        }
         const img = await loadImageEl(dataUrl);
         imgW = img.naturalWidth || img.width;
         imgH = img.naturalHeight || img.height;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   TYPOLOGIES,
   LOTS,
@@ -11,120 +11,17 @@ import Home from './Home.jsx';
 import HistoryView from './HistoryView.jsx';
 import SaveModal from './SaveModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
-import { clearAllPhotos } from './storage.js';
-
-const STORAGE_KEY = 'suivi-chantier-v2';
-const AUTH_KEY = 'suivi-chantier-auth';
-const MIGRATION_FLAG = 'suivi-chantier-migrated-v2';
-const MIGRATION_V21_FLAG = 'suivi-chantier-migrated-v21';
-
-// ---------- Migrations ----------
-
-async function runV2MigrationIfNeeded() {
-  if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
-  try {
-    localStorage.removeItem('suivi-chantier-v1');
-  } catch {}
-  try {
-    await clearAllPhotos();
-  } catch (e) {
-    console.warn('Migration v2 : suppression photos KO', e);
-  }
-  localStorage.setItem(MIGRATION_FLAG, '1');
-}
-
-const QUINCAILLERIE_REMAP = {
-  studio: {
-    boiserie_bibancom: {
-      'Poignée Digitale': 'Quincaillerie — Poignée Digitale',
-      'Canon Bouton SDB': 'Quincaillerie — Canon Bouton SDB',
-      'Butoirs portes': 'Quincaillerie — Butoirs portes',
-      'Poignées portes intérieur x 2': 'Quincaillerie — Poignées portes intérieur x 2'
-    }
-  },
-  appt2c: {
-    boiserie_bibancom: {
-      'Butoirs portes x 5': 'Quincaillerie — Butoirs portes x 5',
-      'Poignées portes intérieur x 5': 'Quincaillerie — Poignées portes intérieur x 5'
-    }
-  },
-  appt3c: {
-    boiserie_bibancom: {
-      'Butoirs portes x 7': 'Quincaillerie — Butoirs portes x 7',
-      'Poignées portes intérieur x 7': 'Quincaillerie — Poignées portes intérieur x 7'
-    }
-  }
-};
-
-function runV21KeyRemapIfNeeded() {
-  if (localStorage.getItem(MIGRATION_V21_FLAG) === '1') return;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const state = JSON.parse(raw);
-      if (state && typeof state === 'object') {
-        for (const [typoId, typoMap] of Object.entries(QUINCAILLERIE_REMAP)) {
-          const typoState = state[typoId];
-          if (!typoState) continue;
-          for (const unitId of Object.keys(typoState)) {
-            const unitState = typoState[unitId];
-            if (!unitState) continue;
-            for (const [lotId, keyMap] of Object.entries(typoMap)) {
-              const lotState = unitState[lotId];
-              if (!lotState) continue;
-              for (const [oldKey, newKey] of Object.entries(keyMap)) {
-                if (oldKey in lotState) {
-                  lotState[newKey] = lotState[oldKey];
-                  delete lotState[oldKey];
-                }
-              }
-            }
-          }
-        }
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      }
-    }
-  } catch (e) {
-    console.warn('Migration v2.1 : remap clés KO', e);
-  }
-  localStorage.setItem(MIGRATION_V21_FLAG, '1');
-}
-
-// ---------- Persistance ----------
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (e) {
-    console.warn('Échec sauvegarde localStorage', e);
-  }
-}
-
-function loadAuth() {
-  try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return null;
-    // Ancien format : juste une string. On force re-login pour récupérer le rôle.
-    if (raw.startsWith('{')) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.username && parsed?.role) return parsed;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
+import {
+  supabase,
+  userInfoFromAuth,
+  signOut,
+  getCurrentSession
+} from './supabase.js';
+import {
+  getDraftState,
+  setDraftState,
+  subscribeDraftState
+} from './storage.js';
 
 // ---------- Helpers progression ----------
 
@@ -513,23 +410,96 @@ function TypologyView({ user, role, typoId, state, onToggleItem, onBack, onExpor
 // ---------- App ----------
 
 export default function App() {
-  const [auth, setAuth] = useState(() => loadAuth());
-  const [state, setState] = useState(() => loadState());
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authUser, setAuthUser] = useState(null);
+  const [state, setState] = useState({});
+  const [stateLoaded, setStateLoaded] = useState(false);
   const [view, setView] = useState({ type: 'home' });
   const [saveOpen, setSaveOpen] = useState(false);
   const [toast, setToast] = useState(null);
-  // Bump pour forcer le refresh des PhotosSection après save (photos draft vidées)
   const [photosKey, setPhotosKey] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
 
+  const pushTimerRef = useRef(null);
+  const lastPushedStateRef = useRef(JSON.stringify({}));
+
+  // ---- Auth bootstrap ----
   useEffect(() => {
-    runV2MigrationIfNeeded();
-    runV21KeyRemapIfNeeded();
+    let mounted = true;
+    (async () => {
+      const session = await getCurrentSession();
+      if (mounted) {
+        setAuthUser(session?.user || null);
+        setAuthChecked(true);
+      }
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user || null);
+    });
+    return () => {
+      mounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
   }, []);
 
+  // ---- Charge le draft state cloud quand authentifié ----
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    if (!authUser) {
+      setState({});
+      setStateLoaded(false);
+      return;
+    }
+    let mounted = true;
+    (async () => {
+      try {
+        const cloudState = await getDraftState();
+        if (mounted) {
+          lastPushedStateRef.current = JSON.stringify(cloudState);
+          setState(cloudState);
+          setStateLoaded(true);
+        }
+      } catch (e) {
+        console.warn('Lecture draft state KO', e);
+        if (mounted) setStateLoaded(true);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [authUser?.id]);
+
+  // ---- Realtime subscription au draft state ----
+  useEffect(() => {
+    if (!authUser) return;
+    const unsub = subscribeDraftState((newState) => {
+      const newStr = JSON.stringify(newState || {});
+      if (newStr !== lastPushedStateRef.current) {
+        lastPushedStateRef.current = newStr;
+        setState(newState || {});
+      }
+    });
+    return unsub;
+  }, [authUser?.id]);
+
+  // ---- Push debounced du draft state ----
+  useEffect(() => {
+    if (!authUser || !stateLoaded) return;
+    const stateStr = JSON.stringify(state);
+    if (stateStr === lastPushedStateRef.current) return;
+
+    if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    pushTimerRef.current = setTimeout(async () => {
+      try {
+        lastPushedStateRef.current = stateStr;
+        await setDraftState(state, authUser?.email);
+      } catch (e) {
+        console.warn('Push draft state KO', e);
+      }
+    }, 800);
+    return () => {
+      if (pushTimerRef.current) clearTimeout(pushTimerRef.current);
+    };
+  }, [state, authUser, stateLoaded]);
 
   useEffect(() => {
     if (!toast) return;
@@ -587,38 +557,48 @@ export default function App() {
     URL.revokeObjectURL(url);
   }, [state]);
 
-  const logout = useCallback(() => {
-    if (window.confirm('Se déconnecter ?')) {
-      localStorage.removeItem(AUTH_KEY);
-      setAuth(null);
-      setView({ type: 'home' });
+  const logout = useCallback(async () => {
+    if (!window.confirm('Se déconnecter ?')) return;
+    try {
+      await signOut();
+    } catch (e) {
+      console.warn('Sign out KO', e);
     }
+    setView({ type: 'home' });
   }, []);
 
   const handleSaved = useCallback((snap) => {
     setSaveOpen(false);
     setToast(`Contrôle #${snap.id} enregistré le ${new Date(snap.createdAt).toLocaleString('fr-FR')}.`);
-    // Refresh photos sections (draft est maintenant vide)
     setPhotosKey((k) => k + 1);
     setRefreshKey((k) => k + 1);
   }, []);
 
-  // ---------- Login gate ----------
+  // ---- Loading / Login gates ----
 
-  if (!auth) {
+  if (!authChecked) {
     return (
-      <Login
-        onLogin={(username, role) => {
-          const a = { username, role };
-          localStorage.setItem(AUTH_KEY, JSON.stringify(a));
-          setAuth(a);
-          setView({ type: 'home' });
-        }}
-      />
+      <div className="min-h-full flex items-center justify-center bg-blue-800 text-white">
+        <p className="text-sm">Chargement…</p>
+      </div>
     );
   }
 
-  // ---------- Routes ----------
+  if (!authUser) {
+    return <Login onLogin={(user) => setAuthUser(user)} />;
+  }
+
+  const userInfo = userInfoFromAuth(authUser);
+  const role = userInfo?.role || 'tech';
+  const displayName = userInfo?.displayName || authUser.email;
+
+  if (!stateLoaded) {
+    return (
+      <div className="min-h-full flex items-center justify-center bg-slate-100">
+        <p className="text-sm text-slate-600">Synchronisation des données…</p>
+      </div>
+    );
+  }
 
   if (view.type === 'history') {
     return <HistoryView onClose={() => setView({ type: 'home' })} />;
@@ -628,8 +608,9 @@ export default function App() {
     return (
       <>
         <Home
-          user={auth.username}
-          role={auth.role}
+          user={displayName}
+          role={role}
+          state={state}
           refreshKey={refreshKey}
           onSelectTypology={(typoId) => setView({ type: 'typology', typoId })}
           onOpenHistory={() => setView({ type: 'history' })}
@@ -649,8 +630,8 @@ export default function App() {
   return (
     <>
       <TypologyView
-        user={auth.username}
-        role={auth.role}
+        user={displayName}
+        role={role}
         typoId={view.typoId}
         state={state}
         onToggleItem={toggleItem}
@@ -663,7 +644,7 @@ export default function App() {
         open={saveOpen}
         onClose={() => setSaveOpen(false)}
         state={state}
-        technicianName={auth.username}
+        technicianName={displayName}
         onSaved={handleSaved}
       />
       {toast && (
