@@ -10,6 +10,7 @@ import Login from './Login.jsx';
 import Home from './Home.jsx';
 import HistoryView from './HistoryView.jsx';
 import LotDashboardView from './LotDashboardView.jsx';
+import LotDetailView from './LotDetailView.jsx';
 import SaveModal from './SaveModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
 import {
@@ -606,7 +607,24 @@ export default function App() {
   }
 
   if (view.type === 'lotDashboard') {
-    return <LotDashboardView state={state} onClose={() => setView({ type: 'home' })} />;
+    return (
+      <LotDashboardView
+        state={state}
+        onSelectLot={(lotId) => setView({ type: 'lotDetail', lotId })}
+        onClose={() => setView({ type: 'home' })}
+      />
+    );
+  }
+
+  if (view.type === 'lotDetail') {
+    return (
+      <LotDetailView
+        lotId={view.lotId}
+        state={state}
+        adminName={displayName}
+        onClose={() => setView({ type: 'lotDashboard' })}
+      />
+    );
   }
 
   if (view.type === 'home') {

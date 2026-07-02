@@ -63,19 +63,26 @@ function computeLotStats(state, lot) {
   return { done, total, unitsDone, unitsInProgress, unitsTodo, typoBreakdown };
 }
 
-function LotCard({ lot, stats }) {
+function LotCard({ lot, stats, onSelect }) {
   const pct = stats.total === 0 ? 0 : Math.round((stats.done / stats.total) * 100);
   const c = statusColor(pct);
   const totalUnits = stats.unitsDone + stats.unitsInProgress + stats.unitsTodo;
 
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border-2 ${c.border} p-4`}>
+    <button
+      type="button"
+      onClick={() => onSelect?.(lot.id)}
+      className={`w-full text-left bg-white rounded-2xl shadow-sm border-2 ${c.border} p-4 active:scale-[0.99] transition-transform tap-target`}
+    >
       <div className="flex items-start gap-3">
         <span className="text-4xl flex-shrink-0" aria-hidden>
           {lot.icon}
         </span>
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-lg text-slate-900 leading-tight">{lot.label}</h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-bold text-lg text-slate-900 leading-tight">{lot.label}</h3>
+            <span className="text-slate-400 text-xl flex-shrink-0 leading-none">›</span>
+          </div>
           <p className="text-xs text-slate-500 mt-0.5">
             Sur {totalUnits} unité{totalUnits > 1 ? 's' : ''} concernée{totalUnits > 1 ? 's' : ''}
           </p>
@@ -131,11 +138,11 @@ function LotCard({ lot, stats }) {
           )}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
-export default function LotDashboardView({ state, onClose }) {
+export default function LotDashboardView({ state, onSelectLot, onClose }) {
   const data = useMemo(() => {
     return LOTS.map((lot) => ({ lot, stats: computeLotStats(state, lot) }));
   }, [state]);
@@ -177,7 +184,7 @@ export default function LotDashboardView({ state, onClose }) {
 
       <main className="flex-1 px-3 py-3 pb-24 space-y-3">
         {nonEmpty.map(({ lot, stats }) => (
-          <LotCard key={lot.id} lot={lot} stats={stats} />
+          <LotCard key={lot.id} lot={lot} stats={stats} onSelect={onSelectLot} />
         ))}
       </main>
     </div>
