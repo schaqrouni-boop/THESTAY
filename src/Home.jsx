@@ -32,7 +32,7 @@ const ICONS = {
   couloirs: '🛗'
 };
 
-export default function Home({ user, role, state, onSelectTypology, onOpenHistory, onLogout, refreshKey }) {
+export default function Home({ user, role, state, onSelectTypology, onOpenHistory, onOpenLotDashboard, onLogout, refreshKey }) {
   const [snapshotCount, setSnapshotCount] = useState(0);
   const [lastSnapshot, setLastSnapshot] = useState(null);
 
@@ -148,10 +148,29 @@ export default function Home({ user, role, state, onSelectTypology, onOpenHistor
         </div>
 
         {role === 'admin' && (
-          <div className="mt-6">
+          <div className="mt-6 space-y-3">
             <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
               Administration
             </h2>
+            <button
+              onClick={onOpenLotDashboard}
+              className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-4xl" aria-hidden>🛠️</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-slate-900 leading-tight">
+                    Suivi par corps de métier
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Progression des 9 lots agrégée sur toutes les typologies
+                  </p>
+                  <p className="text-xs text-blue-700 font-semibold mt-2">
+                    Voir la vue lots →
+                  </p>
+                </div>
+              </div>
+            </button>
             <button
               onClick={onOpenHistory}
               className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"

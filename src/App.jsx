@@ -9,6 +9,7 @@ import {
 import Login from './Login.jsx';
 import Home from './Home.jsx';
 import HistoryView from './HistoryView.jsx';
+import LotDashboardView from './LotDashboardView.jsx';
 import SaveModal from './SaveModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
 import {
@@ -604,6 +605,10 @@ export default function App() {
     return <HistoryView onClose={() => setView({ type: 'home' })} />;
   }
 
+  if (view.type === 'lotDashboard') {
+    return <LotDashboardView state={state} onClose={() => setView({ type: 'home' })} />;
+  }
+
   if (view.type === 'home') {
     return (
       <>
@@ -614,6 +619,7 @@ export default function App() {
           refreshKey={refreshKey}
           onSelectTypology={(typoId) => setView({ type: 'typology', typoId })}
           onOpenHistory={() => setView({ type: 'history' })}
+          onOpenLotDashboard={() => setView({ type: 'lotDashboard' })}
           onLogout={logout}
         />
         {toast && (
