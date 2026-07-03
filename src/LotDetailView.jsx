@@ -48,7 +48,7 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
     if (!lotId) return;
     (async () => {
       try {
-        const photos = await getPhotosBySection(lotId, 'draft');
+        const photos = await getPhotosBySection(lotId, 'all');
         const counts = {};
         for (const p of photos) {
           const key = `${p.typoId}|${p.unitId}`;
@@ -102,7 +102,7 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
         technicianName: `Consultation ${adminName || 'admin'}`,
         signatureDataUrl: null,
         includePhotos: true,
-        sessionId: 'draft'
+        sessionId: 'all'
       });
       const file = new File([blob], fileName, { type: 'application/pdf' });
       const title = fileName.replace('.pdf', '');
