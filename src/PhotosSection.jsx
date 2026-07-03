@@ -2,6 +2,29 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { addPhoto, deletePhoto, getPhotosForUnit } from './storage.js';
 import { compressImage } from './photoUtils.js';
 
+function formatShortDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function formatFullDate(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  return d.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 // Charge les photos depuis Supabase (avec URL signée déjà attachée).
 function usePhotosForUnit(typoId, unitId, section, enabled, sessionId) {
   const [items, setItems] = useState([]);
@@ -122,21 +145,34 @@ export default function PhotosSection({
         </p>
       ) : (
         <div className="grid grid-cols-3 gap-2">
-          {items.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              onClick={() => setLightbox(p)}
-              className="relative aspect-square rounded-lg overflow-hidden bg-slate-200 border-2 border-slate-300 active:border-blue-600"
-            >
-              <img
-                src={p.url}
-                alt=""
-                className="w-full h-full object-cover"
-                loading="lazy"
-              />
-            </button>
-          ))}
+          {items.map((p) => {
+            const isSnapshot = p.sessionId && p.sessionId !== 'draft';
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setLightbox(p)}
+                className="relative aspect-square rounded-lg overflow-hidden bg-slate-200 border-2 border-slate-300 active:border-blue-600"
+              >
+                <img
+                  src={p.url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+                {/* Date en overlay bas */}
+                <div className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[10px] font-semibold text-center px-1 py-0.5 truncate">
+                  {formatShortDate(p.createdAt)}
+                </div>
+                {/* Badge session en haut à droite */}
+                {isSnapshot && (
+                  <div className="absolute top-1 right-1 bg-blue-700 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow">
+                    #{p.sessionId}
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -170,7 +206,16 @@ export default function PhotosSection({
               Fermer
             </button>
           </div>
-          <p className="text-white/70 text-xs mt-3">Photo {lightbox.id}</p>
+          <div className="mt-3 text-center">
+            <p className="text-white text-sm font-semibold">
+              📅 {formatFullDate(lightbox.createdAt)}
+            </p>
+            <p className="text-white/60 text-xs mt-1">
+              {lightbox.sessionId && lightbox.sessionId !== 'draft'
+                ? `Contrôle enregistré #${lightbox.sessionId}`
+                : 'Brouillon (en cours)'}
+            </p>
+          </div>
         </div>
       )}
     </div>

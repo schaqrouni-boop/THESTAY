@@ -152,6 +152,10 @@ async function attachUrls(rows) {
 }
 
 function applySessionFilter(query, sessionId) {
+  if (sessionId === 'all') {
+    // Toutes sessions confondues (draft + snapshots signés) — utilisé pour l'historique
+    return query;
+  }
   if (sessionId === 'draft' || sessionId == null) {
     return query.is('session_id', null);
   }

@@ -138,8 +138,8 @@ export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
             section={lotId}
             enabled={true}
             readOnly={true}
-            sessionId="draft"
-            labelOverride={`Photos ${lot.short.toLowerCase()}`}
+            sessionId="all"
+            labelOverride={`Historique photos ${lot.short.toLowerCase()}`}
           />
         </div>
       </main>
