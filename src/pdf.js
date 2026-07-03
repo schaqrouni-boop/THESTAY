@@ -527,3 +527,142 @@ export async function generateReport({
   const fileName = `THESTAY_${safeShort}_${dateStr.replace(/\//g, '-')}.pdf`;
   return { blob, fileName };
 }
+
+// --------- Rapport "Actions restantes" (uniquement les cases NON cochées) ---------
+// Version condensée pour les réunions : liste par unité de ce qui reste à faire.
+// Skip les unités et typologies 100% terminées.
+
+export async function generateMissingReport({
+  lotId,
+  state,
+  technicianName,
+  signatureDataUrl = null
+}) {
+  const lot = LOTS.find((l) => l.id === lotId);
+  if (!lot) throw new Error(`Lot inconnu : ${lotId}`);
+
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const title = `Actions restantes — ${lot.label}`;
+  const dateStr = formatDate();
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+
+  // Totaux
+  let globalDone = 0;
+  let globalTotal = 0;
+  for (const t of TYPOLOGIES) {
+    const items = flatItemsForLot(t.id, lotId);
+    for (const u of t.units) {
+      const us = state?.[t.id]?.[u]?.[lotId] || {};
+      for (const it of items) {
+        globalTotal += 1;
+        if (us[it.key]) globalDone += 1;
+      }
+    }
+  }
+  const globalMissing = globalTotal - globalDone;
+
+  await drawHeader(doc, title);
+  drawInfoBlock(doc, { technicianName, dateStr, globalDone, globalTotal });
+
+  let cursorY = 60;
+
+  // Cas "tout terminé"
+  if (globalMissing === 0) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor(...GREEN);
+    doc.text('Aucune action restante', pageW / 2, 120, { align: 'center' });
+    doc.setFontSize(14);
+    doc.setTextColor(...SLATE);
+    doc.text('Lot 100% terminé', pageW / 2, 132, { align: 'center' });
+  } else {
+    for (const typology of TYPOLOGIES) {
+      const items = flatItemsForLot(typology.id, lotId);
+      if (!items.length) continue;
+
+      // Calcul par unité
+      const unitsWithMissing = [];
+      for (const unitId of typology.units) {
+        const us = state?.[typology.id]?.[unitId]?.[lotId] || {};
+        const done = items.filter((it) => us[it.key]).length;
+        const missing = items.filter((it) => !us[it.key]);
+        if (missing.length === 0) continue;
+        unitsWithMissing.push({ unitId, done, total: items.length, missing });
+      }
+      if (unitsWithMissing.length === 0) continue;
+
+      // Titre typologie
+      if (cursorY > pageH - 60) {
+        doc.addPage();
+        await drawHeader(doc, title);
+        cursorY = 38;
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(13);
+      doc.setTextColor(...PRIMARY);
+      doc.text(
+        `${typology.label} — ${unitsWithMissing.length} unité${unitsWithMissing.length > 1 ? 's' : ''} avec actions restantes`,
+        10,
+        cursorY
+      );
+      cursorY += 6;
+
+      for (const { unitId, done, total, missing } of unitsWithMissing) {
+        const pct = Math.round((done / total) * 100);
+        const heightEstimate = 10 + missing.length * 4.8 + 3;
+
+        // Saut de page si le bloc unité ne rentre pas
+        if (cursorY + heightEstimate > pageH - 55) {
+          doc.addPage();
+          await drawHeader(doc, title);
+          cursorY = 38;
+        }
+
+        // Bandeau orange par unité
+        doc.setFillColor(...ORANGE);
+        doc.roundedRect(10, cursorY, pageW - 20, 8, 1.2, 1.2, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(255, 255, 255);
+        doc.text(`${unitId} — ${done}/${total} · ${pct}%`, 13, cursorY + 5.5);
+        doc.text(
+          `${missing.length} action${missing.length > 1 ? 's' : ''} restante${missing.length > 1 ? 's' : ''}`,
+          pageW - 13,
+          cursorY + 5.5,
+          { align: 'right' }
+        );
+        cursorY += 11;
+
+        // Liste des items non cochés
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(30, 41, 59);
+        for (const item of missing) {
+          const label = item.group ? `${item.group} — ${item.label}` : item.label;
+          doc.setFillColor(...ORANGE);
+          doc.circle(14, cursorY - 1, 0.9, 'F');
+          doc.text(label, 18, cursorY);
+          cursorY += 4.5;
+        }
+        cursorY += 3;
+      }
+      cursorY += 4;
+    }
+  }
+
+  // Header + footer sur toutes les pages
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= pageCount; p++) {
+    doc.setPage(p);
+    if (p > 1) {
+      await drawHeader(doc, title);
+    }
+    drawSignatureAndFooter(doc, { signatureDataUrl, technicianName, dateStr });
+  }
+
+  const blob = doc.output('blob');
+  const safeShort = lot.short.replace(/[^a-zA-Z0-9]+/g, '_');
+  const fileName = `THESTAY_${safeShort}_ActionsRestantes_${dateStr.replace(/\//g, '-')}.pdf`;
+  return { blob, fileName };
+}

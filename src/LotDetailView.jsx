@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LOTS, TYPOLOGIES, flatItemsForLot } from './data.js';
 import { getPhotosBySection } from './storage.js';
-import { generateReport } from './pdf.js';
+import { generateReport, generateMissingReport } from './pdf.js';
 
 // Vue détail admin : pour un lot donné, montre l'état d'avancement par unité
 // et permet de télécharger un PDF complet (état courant + photos draft).
@@ -118,6 +118,32 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
     }
   };
 
+  const handleDownloadMissing = async () => {
+    if (!lot) return;
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const { blob, fileName } = await generateMissingReport({
+        lotId: lot.id,
+        state,
+        technicianName: `Consultation ${adminName || 'admin'}`,
+        signatureDataUrl: null
+      });
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      const title = fileName.replace('.pdf', '');
+      const result = await shareOrDownload(file, title);
+      if (result === 'cancelled') setStatus('Envoi annulé.');
+      else if (result === 'shared') setStatus('Actions restantes partagées.');
+      else setStatus('Actions restantes téléchargées.');
+    } catch (e) {
+      console.error(e);
+      setError('Erreur génération : ' + (e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!lot) {
     return (
       <div className="min-h-full flex items-center justify-center bg-slate-100 p-6 text-center">
@@ -166,14 +192,24 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
       </header>
 
       <main className="flex-1 px-3 py-3 pb-24 space-y-4">
-        <button
-          onClick={handleDownload}
-          disabled={busy}
-          className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
-        >
-          <span aria-hidden>📤</span>
-          {busy ? 'Génération du PDF…' : 'Télécharger le rapport PDF'}
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={handleDownload}
+            disabled={busy}
+            className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            <span aria-hidden>📤</span>
+            {busy ? 'Génération…' : 'Rapport complet (état + photos)'}
+          </button>
+          <button
+            onClick={handleDownloadMissing}
+            disabled={busy}
+            className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 disabled:opacity-60 text-white font-bold text-base py-3.5 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
+          >
+            <span aria-hidden>📋</span>
+            {busy ? 'Génération…' : 'Rapport actions à mener (pour réunion)'}
+          </button>
+        </div>
 
         {error && (
           <div className="bg-red-50 border-2 border-red-300 text-red-800 px-3 py-2 rounded-lg text-sm font-medium">
