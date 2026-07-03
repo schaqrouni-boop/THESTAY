@@ -257,30 +257,28 @@ function drawGroupTable(doc, { typology, lotId, group, state, startY }) {
   return doc.lastAutoTable.finalY;
 }
 
-// --------- Pages photos pour un lot ---------
+// --------- Bloc photos par typologie ---------
+// Dessine les photos d'une typologie (déjà filtrées) à partir de startY.
+// Groupe par unité. Gère les sauts de page.
+// Retourne le Y final après le bloc.
 
-async function appendPhotoPages(doc, sectionLabel, photos) {
-  if (!photos.length) return;
+async function drawPhotosBlock(doc, sectionLabel, photos, startY, typoLabelStr) {
+  if (!photos.length) return startY;
 
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const marginX = 10;
-  const topY = 60;
+  const topY = 38;
   const bottomLimit = pageH - 58;
 
   const groups = new Map();
   for (const p of photos) {
-    const key = `${p.typoId}|${p.unitId}`;
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(p);
+    if (!groups.has(p.unitId)) groups.set(p.unitId, []);
+    groups.get(p.unitId).push(p);
   }
 
-  const typoLabel = (id) => TYPOLOGIES.find((t) => t.id === id)?.label || id;
-
-  doc.addPage();
-  await drawHeader(doc, sectionLabel + ' — Photos');
-  let y = topY;
-  let firstOnPage = true;
+  let y = startY;
+  let firstOnPage = false;
 
   const cols = 3;
   const colGap = 4;
@@ -303,14 +301,13 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
 
   const newPage = async () => {
     doc.addPage();
-    await drawHeader(doc, sectionLabel + ' — Photos');
+    await drawHeader(doc, `${sectionLabel} — Photos ${typoLabelStr || ''}`.trim());
     y = topY;
     firstOnPage = true;
   };
 
-  for (const [key, items] of groups) {
-    const [typoId, unitId] = key.split('|');
-    const heading = `${unitId}  ·  ${typoLabel(typoId)}  ·  ${items.length} photo${items.length > 1 ? 's' : ''}`;
+  for (const [unitId, items] of groups) {
+    const heading = `${unitId}  ·  ${items.length} photo${items.length > 1 ? 's' : ''}`;
 
     // Saut de page si pas la place pour le bandeau + au moins une ligne de photos
     if (y + headingBarH + rowH + 4 > bottomLimit) await newPage();
@@ -390,6 +387,8 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
     }
     y += 2;
   }
+
+  return y;
 }
 
 // --------- Génération d'un rapport pour un lot ---------
@@ -425,6 +424,20 @@ export async function generateReport({
 
   await drawHeader(doc, title);
   drawInfoBlock(doc, { technicianName, dateStr, globalDone, globalTotal });
+
+  // Pré-charger toutes les photos une seule fois et grouper par typologie
+  const photosByTypo = new Map();
+  if (includePhotos) {
+    try {
+      const allPhotos = await getPhotosBySection(lotId, sessionId);
+      for (const p of allPhotos) {
+        if (!photosByTypo.has(p.typoId)) photosByTypo.set(p.typoId, []);
+        photosByTypo.get(p.typoId).push(p);
+      }
+    } catch (e) {
+      console.warn('Chargement photos KO', e);
+    }
+  }
 
   let cursorY = 60;
   const pageH = doc.internal.pageSize.getHeight();
@@ -472,25 +485,35 @@ export async function generateReport({
     }
 
     cursorY += 4;
-  }
 
-  const lastTablePage = doc.internal.getNumberOfPages();
-
-  if (includePhotos) {
-    try {
-      const photos = await getPhotosBySection(lotId, sessionId);
-      if (photos.length) {
-        await appendPhotoPages(doc, title, photos);
+    // Insertion des photos de la typologie juste après ses tableaux
+    const typoPhotos = photosByTypo.get(typology.id);
+    if (includePhotos && typoPhotos?.length) {
+      // Titre du bloc photos de cette typologie
+      if (cursorY > pageH - 80) {
+        doc.addPage();
+        await drawHeader(doc, title);
+        cursorY = 38;
       }
-    } catch (e) {
-      console.warn('Photos non incluses :', e);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(...SLATE);
+      doc.text(
+        `📷 Photos ${typology.label} (${typoPhotos.length})`,
+        10,
+        cursorY + 2
+      );
+      cursorY += 6;
+
+      cursorY = await drawPhotosBlock(doc, title, typoPhotos, cursorY, typology.label);
+      cursorY += 4;
     }
   }
 
   const pageCount = doc.internal.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
-    if (p > 1 && p <= lastTablePage) {
+    if (p > 1) {
       await drawHeader(doc, title);
     }
     drawSignatureAndFooter(doc, { signatureDataUrl, technicianName, dateStr });
