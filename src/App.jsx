@@ -11,6 +11,7 @@ import Home from './Home.jsx';
 import HistoryView from './HistoryView.jsx';
 import LotDashboardView from './LotDashboardView.jsx';
 import LotDetailView from './LotDetailView.jsx';
+import LotUnitView from './LotUnitView.jsx';
 import SaveModal from './SaveModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
 import {
@@ -622,7 +623,22 @@ export default function App() {
         lotId={view.lotId}
         state={state}
         adminName={displayName}
+        onSelectUnit={(typoId, unitId) =>
+          setView({ type: 'lotUnit', lotId: view.lotId, typoId, unitId })
+        }
         onClose={() => setView({ type: 'lotDashboard' })}
+      />
+    );
+  }
+
+  if (view.type === 'lotUnit') {
+    return (
+      <LotUnitView
+        lotId={view.lotId}
+        typoId={view.typoId}
+        unitId={view.unitId}
+        state={state}
+        onClose={() => setView({ type: 'lotDetail', lotId: view.lotId })}
       />
     );
   }

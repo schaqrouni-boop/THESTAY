@@ -37,7 +37,7 @@ async function shareOrDownload(file, title) {
   return 'downloaded';
 }
 
-export default function LotDetailView({ lotId, state, adminName, onClose }) {
+export default function LotDetailView({ lotId, state, adminName, onSelectUnit, onClose }) {
   const lot = LOTS.find((l) => l.id === lotId);
   const [photoCounts, setPhotoCounts] = useState({});
   const [busy, setBusy] = useState(false);
@@ -212,22 +212,29 @@ export default function LotDetailView({ lotId, state, adminName, onClose }) {
                   const uPct = u.total === 0 ? 0 : Math.round((u.done / u.total) * 100);
                   const uc = statusColor(uPct);
                   return (
-                    <li key={u.unitId} className="px-3 py-2 flex items-center gap-3">
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${uc.bar}`} />
-                      <span className="font-bold text-sm text-slate-900 w-16 flex-shrink-0">
-                        {u.unitId}
-                      </span>
-                      <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                        <div className={`${uc.bar} h-1.5`} style={{ width: `${uPct}%` }} />
-                      </div>
-                      <span className={`text-xs font-semibold whitespace-nowrap ${uc.text} w-20 text-right`}>
-                        {u.done}/{u.total} · {uPct}%
-                      </span>
-                      {u.photoCount > 0 && (
-                        <span className="text-xs text-slate-500 flex items-center gap-0.5 flex-shrink-0">
-                          📷 {u.photoCount}
+                    <li key={u.unitId}>
+                      <button
+                        type="button"
+                        onClick={() => onSelectUnit?.(typo.id, u.unitId)}
+                        className="w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-slate-50 active:bg-slate-100 tap-target"
+                      >
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${uc.bar}`} />
+                        <span className="font-bold text-sm text-slate-900 w-16 flex-shrink-0">
+                          {u.unitId}
                         </span>
-                      )}
+                        <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                          <div className={`${uc.bar} h-1.5`} style={{ width: `${uPct}%` }} />
+                        </div>
+                        <span className={`text-xs font-semibold whitespace-nowrap ${uc.text} w-20 text-right`}>
+                          {u.done}/{u.total} · {uPct}%
+                        </span>
+                        {u.photoCount > 0 && (
+                          <span className="text-xs text-slate-500 flex items-center gap-0.5 flex-shrink-0">
+                            📷 {u.photoCount}
+                          </span>
+                        )}
+                        <span className="text-slate-400 text-lg flex-shrink-0 leading-none">›</span>
+                      </button>
                     </li>
                   );
                 })}
