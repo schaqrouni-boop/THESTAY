@@ -495,12 +495,15 @@ export async function generateReport({
         await drawHeader(doc, title);
         cursorY = 38;
       }
+      // Petit carré bleu comme repère visuel (remplace l'emoji, non supporté par jsPDF)
+      doc.setFillColor(...PRIMARY);
+      doc.rect(10, cursorY - 1, 3.5, 3.5, 'F');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(11);
-      doc.setTextColor(...SLATE);
+      doc.setTextColor(...PRIMARY);
       doc.text(
-        `📷 Photos ${typology.label} (${typoPhotos.length})`,
-        10,
+        `Photos — ${typology.label} (${typoPhotos.length})`,
+        16,
         cursorY + 2
       );
       cursorY += 6;
