@@ -74,6 +74,13 @@ function formatDate(d = new Date()) {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+function formatShortDateTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 // --------- En-tête commun ---------
 
 async function drawHeader(doc, title, subtitle = 'Suivi de chantier') {
@@ -275,11 +282,12 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
   let y = topY;
   let firstOnPage = true;
 
-  const colGap = 6;
-  const slotW = (pageW - marginX * 2 - colGap) / 2;
-  const slotH = 56;
-  const captionH = 6;
-  const rowH = slotH + captionH;
+  const cols = 3;
+  const colGap = 4;
+  const slotW = (pageW - marginX * 2 - (cols - 1) * colGap) / cols;
+  const slotH = 45;
+  const captionH = 5;
+  const rowH = slotH + captionH + 2;
   const headingBarH = 9;
 
   const drawHeadingBar = (text, suffix = '') => {
@@ -358,26 +366,27 @@ async function appendPhotoPages(doc, sectionLabel, photos) {
         console.warn('addImage failed', e);
       }
 
-      // Caption sous la photo : "S01 — photo 2/5"
+      // Caption sous la photo : "S01 · 18/06 14:30"
       photoIndex += 1;
+      const dateStr = formatShortDateTime(p.createdAt);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7.5);
       doc.setTextColor(...SLATE);
       doc.text(
-        `${unitId} — photo ${photoIndex}/${items.length}`,
+        dateStr ? `${unitId} · ${dateStr}` : `${unitId}`,
         slotX + slotW / 2,
-        slotY + slotH + 4,
+        slotY + slotH + 3.5,
         { align: 'center' }
       );
 
       col += 1;
-      if (col === 2) {
+      if (col === cols) {
         col = 0;
-        y += rowH + 3;
+        y += rowH + 2;
       }
     }
     if (col !== 0) {
-      y += rowH + 3;
+      y += rowH + 2;
     }
     y += 2;
   }
