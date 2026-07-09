@@ -10,6 +10,7 @@
 export const LOTS = [
   { id: 'cuisine_woodymar',         label: 'Cuisine Woodymar',         short: 'Cuisine',  icon: '🍳' },
   { id: 'boiserie_bibancom',        label: 'Boiserie Bibancom',        short: 'Boiserie', icon: '🚪' },
+  { id: 'quincaillerie',            label: 'Quincaillerie',            short: 'Quincaillerie', icon: '🔩' },
   { id: 'parquet',                  label: 'Parquet',                  short: 'Parquet',  icon: '🪵' },
   { id: 'electricien_sobimel',      label: 'Électricien Sobimel',      short: 'Élec.',    icon: '⚡' },
   { id: 'plomberie_climasec',       label: 'Plomberie Climasec',       short: 'Plomb.',   icon: '🚿' },
@@ -68,16 +69,13 @@ export const LOT_ITEMS = {
       'Porte Chambre',
       'Dressing chambranle et plinthe',
       'Dressing portes',
-      'Dressing étagères et tiroirs',
-      {
-        group: 'Quincaillerie',
-        items: [
-          'Poignée Digitale',
-          'Canon Bouton SDB',
-          'Butoirs portes',
-          'Poignées portes intérieur x 2'
-        ]
-      }
+      'Dressing étagères et tiroirs'
+    ],
+    quincaillerie: [
+      'Poignée Digitale',
+      'Canon Bouton SDB',
+      'Butoirs portes',
+      'Poignées portes intérieur x 2'
     ],
     parquet: PARQUET,
     electricien_sobimel: electricienFor(['Dressing LEDs']),
@@ -128,12 +126,9 @@ export const LOT_ITEMS = {
         group: 'Suite Parentale',
         items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
-      { group: 'Cuisine', items: ['Porte'] },
-      {
-        group: 'Quincaillerie',
-        items: ['Butoirs portes x 5', 'Poignées portes intérieur x 5']
-      }
+      { group: 'Cuisine', items: ['Porte'] }
     ],
+    quincaillerie: ['Butoirs portes x 5', 'Poignées portes intérieur x 5'],
     parquet: PARQUET,
     electricien_sobimel: electricienFor([
       'Dressing LEDs Chambre Enfant',
@@ -249,12 +244,9 @@ export const LOT_ITEMS = {
         group: 'Suite Parentale',
         items: ['Porte', 'Dressing porte', 'Dressing chambranle et plinthe', 'Dressing étagères et tiroirs']
       },
-      { group: 'Cuisine', items: ['Porte'] },
-      {
-        group: 'Quincaillerie',
-        items: ['Butoirs portes x 7', 'Poignées portes intérieur x 7']
-      }
+      { group: 'Cuisine', items: ['Porte'] }
     ],
+    quincaillerie: ['Butoirs portes x 7', 'Poignées portes intérieur x 7'],
     parquet: PARQUET,
     electricien_sobimel: electricienFor([
       'Dressing LEDs Chambre Enfant 1',

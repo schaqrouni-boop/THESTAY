@@ -26,6 +26,37 @@ import {
   subscribeDraftState
 } from './storage.js';
 
+// ---------- Migration : Quincaillerie sort de Boiserie et devient un lot ----------
+// Déplace les clés "Quincaillerie — X" de boiserie_bibancom vers le lot quincaillerie
+// avec la clé "X". Renvoie { state, changed }.
+const QUINCAILLERIE_PREFIX = 'Quincaillerie — ';
+
+function migrateQuincaillerie(state) {
+  if (!state || typeof state !== 'object') return { state: state || {}, changed: false };
+  let changed = false;
+  const next = JSON.parse(JSON.stringify(state));
+  for (const typoId of Object.keys(next)) {
+    const typoBlock = next[typoId];
+    if (!typoBlock) continue;
+    for (const unitId of Object.keys(typoBlock)) {
+      const unitBlock = typoBlock[unitId];
+      if (!unitBlock) continue;
+      const boiserie = unitBlock.boiserie_bibancom;
+      if (!boiserie) continue;
+      for (const key of Object.keys(boiserie)) {
+        if (key.startsWith(QUINCAILLERIE_PREFIX)) {
+          const newKey = key.slice(QUINCAILLERIE_PREFIX.length);
+          if (!unitBlock.quincaillerie) unitBlock.quincaillerie = {};
+          unitBlock.quincaillerie[newKey] = boiserie[key];
+          delete boiserie[key];
+          changed = true;
+        }
+      }
+    }
+  }
+  return { state: next, changed };
+}
+
 // ---------- Helpers progression ----------
 
 function lotProgress(state, typoId, unitId, lotId) {
@@ -456,10 +487,19 @@ export default function App() {
     (async () => {
       try {
         const cloudState = await getDraftState();
+        const { state: migrated, changed } = migrateQuincaillerie(cloudState);
         if (mounted) {
-          lastPushedStateRef.current = JSON.stringify(cloudState);
-          setState(cloudState);
+          lastPushedStateRef.current = JSON.stringify(migrated);
+          setState(migrated);
           setStateLoaded(true);
+        }
+        // Si la migration a modifié quelque chose, on repush une fois vers le cloud
+        if (changed) {
+          try {
+            await setDraftState(migrated, 'migration-quincaillerie');
+          } catch (e) {
+            console.warn('Repush migration quincaillerie KO', e);
+          }
         }
       } catch (e) {
         console.warn('Lecture draft state KO', e);
