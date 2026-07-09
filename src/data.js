@@ -10,7 +10,7 @@
 export const LOTS = [
   { id: 'cuisine_woodymar',         label: 'Cuisine Woodymar',         short: 'Cuisine',  icon: '🍳' },
   { id: 'boiserie_bibancom',        label: 'Boiserie Bibancom',        short: 'Boiserie', icon: '🚪' },
-  { id: 'quincaillerie',            label: 'Quincaillerie',            short: 'Quincaillerie', icon: '🔩' },
+  { id: 'quincaillerie',            label: 'Quincaillerie',            short: 'Quincaillerie', icon: '🔩', excludeFromReports: true },
   { id: 'parquet',                  label: 'Parquet',                  short: 'Parquet',  icon: '🪵' },
   { id: 'electricien_sobimel',      label: 'Électricien Sobimel',      short: 'Élec.',    icon: '⚡' },
   { id: 'plomberie_climasec',       label: 'Plomberie Climasec',       short: 'Plomb.',   icon: '🚿' },
@@ -402,6 +402,11 @@ export function totalItemsForLot(typoId, lotId) {
 // Permet de masquer les lots non applicables (ex : pas de cuisine pour les couloirs).
 export function lotsForTypology(typoId) {
   return LOTS.filter((lot) => totalItemsForLot(typoId, lot.id) > 0);
+}
+
+// Lots exportables dans les rapports PDF (exclut ceux marqués excludeFromReports).
+export function reportableLots() {
+  return LOTS.filter((lot) => !lot.excludeFromReports);
 }
 
 export function totalItemsFor(typoId) {

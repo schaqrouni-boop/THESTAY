@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { generateReport } from './pdf.js';
 import { countPhotosBySection } from './storage.js';
-import { LOTS, flatItemsForLot, TYPOLOGIES } from './data.js';
+import { reportableLots, flatItemsForLot, TYPOLOGIES } from './data.js';
+
+// Liste des lots exportables (exclut Quincaillerie et tout lot marqué excludeFromReports)
+const LOTS = reportableLots();
 
 const SELECTED_LOTS_KEY = 'suivi-chantier-last-selected-lots';
 

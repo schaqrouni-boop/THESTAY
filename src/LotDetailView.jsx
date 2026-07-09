@@ -192,24 +192,35 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
       </header>
 
       <main className="flex-1 px-3 py-3 pb-24 space-y-4">
-        <div className="space-y-2">
-          <button
-            onClick={handleDownload}
-            disabled={busy}
-            className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
-          >
-            <span aria-hidden>📤</span>
-            {busy ? 'Génération…' : 'Rapport complet (état + photos)'}
-          </button>
-          <button
-            onClick={handleDownloadMissing}
-            disabled={busy}
-            className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 disabled:opacity-60 text-white font-bold text-base py-3.5 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
-          >
-            <span aria-hidden>📋</span>
-            {busy ? 'Génération…' : 'Rapport actions à mener (pour réunion)'}
-          </button>
-        </div>
+        {lot.excludeFromReports ? (
+          <div className="bg-slate-100 border-2 border-slate-300 rounded-xl p-4 text-center">
+            <p className="text-sm font-semibold text-slate-700">
+              Ce lot n'est pas inclus dans les rapports PDF.
+            </p>
+            <p className="text-xs text-slate-500 mt-1">
+              Suivi disponible ci-dessous uniquement.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <button
+              onClick={handleDownload}
+              disabled={busy}
+              className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
+            >
+              <span aria-hidden>📤</span>
+              {busy ? 'Génération…' : 'Rapport complet (état + photos)'}
+            </button>
+            <button
+              onClick={handleDownloadMissing}
+              disabled={busy}
+              className="w-full bg-orange-600 hover:bg-orange-700 active:bg-orange-800 disabled:opacity-60 text-white font-bold text-base py-3.5 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
+            >
+              <span aria-hidden>📋</span>
+              {busy ? 'Génération…' : 'Rapport actions à mener (pour réunion)'}
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="bg-red-50 border-2 border-red-300 text-red-800 px-3 py-2 rounded-lg text-sm font-medium">
