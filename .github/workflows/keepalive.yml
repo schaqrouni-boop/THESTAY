@@ -1,0 +1,61 @@
+# Empêche la mise en pause automatique du projet Supabase.
+#
+# Le plan gratuit Supabase met un projet en pause après ~7 jours sans aucune
+# requête API. Ce workflow envoie une requête légère 3 fois par semaine
+# (lundi / mercredi / vendredi), ce qui remet le compteur d'inactivité à zéro.
+#
+# Bonus : si la requête échoue, le job échoue et GitHub envoie un email —
+# ça sert donc aussi de surveillance basique de la santé du backend.
+#
+# La clé utilisée est la "publishable key" (sb_publishable_*), conçue pour être
+# publique : elle est déjà dans le bundle frontend et dans src/supabase.js.
+# La sécurité repose sur les policies RLS côté Supabase.
+
+name: Keep-alive Supabase
+
+on:
+  schedule:
+    - cron: '0 6 * * 1,3,5' # ping Supabase — lun/mer/ven 06:00 UTC
+    - cron: '0 5 1 * *' # 1er du mois — commit pour garder le repo actif
+  workflow_dispatch: # permet de le lancer à la main depuis l'onglet Actions
+
+permissions:
+  contents: write
+
+env:
+  SUPABASE_URL: https://mwiottnkuigxwuyojuox.supabase.co
+  SUPABASE_KEY: sb_publishable_Aa3lTLaAruzJhds_VxpoNQ_Bc6bhQaE
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping l'API Supabase
+        run: |
+          status=$(curl -s -o /tmp/body.txt -w '%{http_code}' \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            "$SUPABASE_URL/rest/v1/draft_state?select=id&limit=1")
+          echo "HTTP $status"
+          cat /tmp/body.txt
+          if [ "$status" != "200" ]; then
+            echo "::error::Supabase a répondu $status — projet en pause ou indisponible ?"
+            exit 1
+          fi
+          echo "Projet Supabase actif."
+
+      # GitHub désactive les workflows planifiés sur un dépôt resté 60 jours sans
+      # aucun commit. Ce commit mensuel garde le dépôt "actif" et évite ça.
+      - name: Checkout
+        if: github.event.schedule == '0 5 1 * *'
+        uses: actions/checkout@v4
+
+      - name: Commit mensuel d'activité
+        if: github.event.schedule == '0 5 1 * *'
+        run: |
+          date -u +'%Y-%m-%dT%H:%M:%SZ' > .github/last-keepalive.txt
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add .github/last-keepalive.txt
+          git commit -m 'chore: keep-alive mensuel (repo + Supabase)' || exit 0
+          git push
