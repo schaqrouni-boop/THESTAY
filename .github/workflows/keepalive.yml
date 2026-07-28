@@ -15,7 +15,7 @@ name: Keep-alive Supabase
 
 on:
   schedule:
-    - cron: '0 6 * * 1,3,5' # ping Supabase — lun/mer/ven 06:00 UTC
+    - cron: '0 6 * * *' # ping Supabase — tous les jours 06:00 UTC
     - cron: '0 5 1 * *' # 1er du mois — commit pour garder le repo actif
   workflow_dispatch: # permet de le lancer à la main depuis l'onglet Actions
 
