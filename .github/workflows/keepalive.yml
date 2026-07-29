@@ -1,10 +1,14 @@
 # Empêche la mise en pause automatique du projet Supabase.
 #
-# Le plan gratuit Supabase met un projet en pause après ~7 jours sans aucune
-# requête API. Ce workflow envoie une requête légère 3 fois par semaine
-# (lundi / mercredi / vendredi), ce qui remet le compteur d'inactivité à zéro.
+# Le plan gratuit Supabase met un projet en pause après ~7 jours sans activité
+# réelle en base. Une simple LECTURE ne suffit pas : les policies RLS bloquent
+# la lecture anonyme (résultat vide) et Supabase ne la compte pas comme activité.
+# Ce workflow fait donc une ÉCRITURE réelle chaque jour : il met à jour la ligne
+# unique de la table dédiée `keepalive` (créée à la main via l'éditeur SQL, avec
+# une policy autorisant l'UPDATE anonyme sur id = 1). Une écriture compte à coup
+# sûr comme activité → le projet ne se met plus en pause.
 #
-# Bonus : si la requête échoue, le job échoue et GitHub envoie un email —
+# Bonus : si l'écriture échoue, le job échoue et GitHub envoie un email —
 # ça sert donc aussi de surveillance basique de la santé du backend.
 #
 # La clé utilisée est la "publishable key" (sb_publishable_*), conçue pour être
@@ -30,19 +34,29 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping l'API Supabase
+      - name: Heartbeat Supabase (écriture réelle)
         run: |
+          ts=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           status=$(curl -s -o /tmp/body.txt -w '%{http_code}' \
+            -X PATCH \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY" \
-            "$SUPABASE_URL/rest/v1/draft_state?select=id&limit=1")
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=representation" \
+            --data "{\"last_ping\":\"$ts\"}" \
+            "$SUPABASE_URL/rest/v1/keepalive?id=eq.1")
           echo "HTTP $status"
           cat /tmp/body.txt
           if [ "$status" != "200" ]; then
-            echo "::error::Supabase a répondu $status — projet en pause ou indisponible ?"
+            echo "::error::Heartbeat KO ($status) — table keepalive absente ou projet en pause ?"
             exit 1
           fi
-          echo "Projet Supabase actif."
+          # Une réponse contenant last_ping prouve qu'une ligne a bien été mise à jour.
+          if ! grep -q 'last_ping' /tmp/body.txt; then
+            echo "::error::Aucune ligne mise à jour — vérifier la table keepalive et la policy anon UPDATE (id = 1)."
+            exit 1
+          fi
+          echo "Heartbeat OK — activité écrite en base."
 
       # GitHub désactive les workflows planifiés sur un dépôt resté 60 jours sans
       # aucun commit. Ce commit mensuel garde le dépôt "actif" et évite ça.
