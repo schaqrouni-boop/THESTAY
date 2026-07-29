@@ -57,6 +57,44 @@ function migrateQuincaillerie(state) {
   return { state: next, changed };
 }
 
+// ---------- Migration : purge des anciennes données Cuisine Woodymar ----------
+// La cuisine est passée d'items plats ("Caissons Hauts posés") à des items
+// groupés (clés "Groupe — Item"). À la demande, on NE reporte PAS les anciennes
+// coches : on vide les anciennes clés plates de cuisine_woodymar — et seulement
+// ce lot. Idempotent : une fois les anciennes clés supprimées, les passages
+// suivants sont sans effet, et les nouvelles clés groupées ne sont jamais touchées.
+const CUISINE_OLD_KEYS = [
+  'Caissons Hauts posés',
+  'Caissons Bas posés',
+  'Portes Hautes posées',
+  'Portes Basses posées',
+  'Electroménager posé',
+  'LEDs Caissons posés',
+  'Crédence Posée',
+  'Plan de travail posé'
+];
+
+function migrateCuisineGroups(state) {
+  if (!state || typeof state !== 'object') return { state: state || {}, changed: false };
+  let changed = false;
+  const next = JSON.parse(JSON.stringify(state));
+  for (const typoId of Object.keys(next)) {
+    const typoBlock = next[typoId];
+    if (!typoBlock) continue;
+    for (const unitId of Object.keys(typoBlock)) {
+      const cuisine = typoBlock[unitId]?.cuisine_woodymar;
+      if (!cuisine) continue;
+      for (const oldKey of CUISINE_OLD_KEYS) {
+        if (oldKey in cuisine) {
+          delete cuisine[oldKey];
+          changed = true;
+        }
+      }
+    }
+  }
+  return { state: next, changed };
+}
+
 // ---------- Helpers progression ----------
 
 function lotProgress(state, typoId, unitId, lotId) {
@@ -487,18 +525,21 @@ export default function App() {
     (async () => {
       try {
         const cloudState = await getDraftState();
-        const { state: migrated, changed } = migrateQuincaillerie(cloudState);
+        const q = migrateQuincaillerie(cloudState);
+        const c = migrateCuisineGroups(q.state);
+        const migrated = c.state;
+        const changed = q.changed || c.changed;
         if (mounted) {
           lastPushedStateRef.current = JSON.stringify(migrated);
           setState(migrated);
           setStateLoaded(true);
         }
-        // Si la migration a modifié quelque chose, on repush une fois vers le cloud
+        // Si une migration a modifié quelque chose, on repush une fois vers le cloud
         if (changed) {
           try {
-            await setDraftState(migrated, 'migration-quincaillerie');
+            await setDraftState(migrated, 'migration-auto');
           } catch (e) {
-            console.warn('Repush migration quincaillerie KO', e);
+            console.warn('Repush migration KO', e);
           }
         }
       } catch (e) {

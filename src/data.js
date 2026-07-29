@@ -20,16 +20,30 @@ export const LOTS = [
   { id: 'cabines_miroirs',          label: 'Cabines et Miroirs',       short: 'Cabines',  icon: '🪞' }
 ];
 
-// Cuisine Woodymar — identique pour toutes les typologies
+// Cuisine Woodymar — identique pour toutes les typologies.
+// Structurée en 4 sous-groupes (Haut / Bas / Led et Electroménager / Céramique).
 const CUISINE_WOODYMAR = [
-  'Caissons Hauts posés',
-  'Caissons Bas posés',
-  'Portes Hautes posées',
-  'Portes Basses posées',
-  'Electroménager posé',
-  'LEDs Caissons posés',
-  'Crédence Posée',
-  'Plan de travail posé'
+  {
+    group: 'Haut',
+    items: [
+      'Caissons Hauts posés',
+      'Portes Hautes Bois posées',
+      'Portes Hautes Verre posées',
+      'Etagères Meubles Hauts posées'
+    ]
+  },
+  {
+    group: 'Bas',
+    items: ['Caissons Bas posés', 'Portes Basses posées', 'Tiroirs Bas posés']
+  },
+  {
+    group: 'Led et Electroménager',
+    items: ['Evier Posé', 'TRIO posé', 'LEDs Caissons posés']
+  },
+  {
+    group: 'Céramique',
+    items: ['Crédence Posée', 'Plan de travail posé', 'Plinthe Plan de travail posée']
+  }
 ];
 
 const PARQUET = ['Parquet', 'Plinthe et Cornière'];
