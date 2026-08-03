@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { LOTS, TYPOLOGIES, flatItemsForLot } from './data.js';
-import { getPhotosBySection } from './storage.js';
+import { getPhotosBySection, listLotReceptions } from './storage.js';
 import { generateReport, generateMissingReport } from './pdf.js';
+import LotReceptionModal from './LotReceptionModal.jsx';
 
 // Vue détail admin : pour un lot donné, montre l'état d'avancement par unité
 // et permet de télécharger un PDF complet (état courant + photos draft).
@@ -44,6 +45,8 @@ export default function LotDetailView({ lotId, state, role, adminName, onSelectU
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [status, setStatus] = useState(null);
+  const [receptions, setReceptions] = useState([]);
+  const [receptionOpen, setReceptionOpen] = useState(false);
 
   useEffect(() => {
     if (!lotId) return;
@@ -60,6 +63,20 @@ export default function LotDetailView({ lotId, state, role, adminName, onSelectU
         console.warn('Compteur photos KO', e);
       }
     })();
+  }, [lotId]);
+
+  const loadReceptions = async () => {
+    try {
+      setReceptions(await listLotReceptions(lotId));
+    } catch (e) {
+      console.warn('Lecture réceptions KO', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!lotId) return;
+    loadReceptions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lotId]);
 
   const byTypology = useMemo(() => {
@@ -147,6 +164,43 @@ export default function LotDetailView({ lotId, state, role, adminName, onSelectU
     }
   };
 
+  // Génère et partage le PDF de réception co-signé (à partir d'un enregistrement).
+  const downloadReception = async (rec) => {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const { blob, fileName } = await generateReport({
+        lotId: rec.lotId,
+        state: rec.snapshot || state,
+        technicianName: rec.technicianName,
+        signatureDataUrl: rec.technicianSignature,
+        companyName: rec.companyName,
+        companyRepName: rec.companyRepName,
+        companySignatureDataUrl: rec.companySignature,
+        includePhotos: true,
+        sessionId: 'all'
+      });
+      const file = new File([blob], fileName, { type: 'application/pdf' });
+      const result = await shareOrDownload(file, fileName.replace('.pdf', ''));
+      if (result === 'cancelled') setStatus('Envoi annulé.');
+      else if (result === 'shared') setStatus('Réception partagée.');
+      else setStatus('Réception téléchargée.');
+    } catch (e) {
+      console.error(e);
+      setError('Erreur génération : ' + (e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReceptionSaved = async (rec) => {
+    setReceptionOpen(false);
+    setStatus('Réception enregistrée et signée.');
+    await loadReceptions();
+    downloadReception(rec);
+  };
+
   if (!lot) {
     return (
       <div className="min-h-full flex items-center justify-center bg-slate-100 p-6 text-center">
@@ -196,10 +250,20 @@ export default function LotDetailView({ lotId, state, role, adminName, onSelectU
 
       <main className="flex-1 px-3 py-3 pb-24 space-y-4">
         {!isAdmin ? (
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 text-center">
-            <p className="text-sm font-semibold text-blue-900">
-              Touchez une unité pour faire la réception de ce lot.
-            </p>
+          <div className="space-y-2">
+            <button
+              onClick={() => setReceptionOpen(true)}
+              disabled={busy}
+              className="w-full bg-green-700 hover:bg-green-800 active:bg-green-900 disabled:opacity-60 text-white font-bold text-base py-4 rounded-xl shadow-lg active:scale-[0.99] flex items-center justify-center gap-2"
+            >
+              <span aria-hidden>✍️</span>
+              Valider la réception du lot (2 signatures)
+            </button>
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 text-center">
+              <p className="text-sm font-semibold text-blue-900">
+                Touchez une unité pour cocher, puis validez le lot avec l’entreprise.
+              </p>
+            </div>
           </div>
         ) : lot.excludeFromReports ? (
           <div className="bg-slate-100 border-2 border-slate-300 rounded-xl p-4 text-center">
@@ -247,6 +311,37 @@ export default function LotDetailView({ lotId, state, role, adminName, onSelectU
             Le PDF contient l'état d'avancement actuel du lot par unité + toutes les photos prises
             (état non signé, version brouillon).
           </p>
+        )}
+
+        {receptions.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border-2 border-green-300 overflow-hidden">
+            <div className="px-3 py-2 bg-green-50 border-b border-green-200">
+              <h3 className="font-bold text-sm text-green-900">
+                Réceptions signées ({receptions.length})
+              </h3>
+            </div>
+            <ul className="divide-y divide-slate-100">
+              {receptions.map((r) => (
+                <li key={r.id} className="px-3 py-2 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 truncate">
+                      {r.companyName} · {r.companyRepName}
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      {new Date(r.createdAt).toLocaleString('fr-FR')} · reçu par {r.technicianName}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => downloadReception(r)}
+                    disabled={busy}
+                    className="bg-blue-700 hover:bg-blue-800 active:bg-blue-900 disabled:opacity-60 text-white text-xs font-bold px-3 py-2 rounded-lg shadow flex-shrink-0"
+                  >
+                    📤 PDF
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         {byTypology.map(({ typo, units, done, total, totalPhotos }) => {
@@ -301,6 +396,17 @@ export default function LotDetailView({ lotId, state, role, adminName, onSelectU
           );
         })}
       </main>
+
+      {!isAdmin && (
+        <LotReceptionModal
+          open={receptionOpen}
+          onClose={() => setReceptionOpen(false)}
+          lotId={lotId}
+          state={state}
+          technicianName={adminName}
+          onSaved={handleReceptionSaved}
+        />
+      )}
     </div>
   );
 }

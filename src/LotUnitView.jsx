@@ -18,7 +18,6 @@ export default function LotUnitView({
   role,
   photosKey,
   onToggleItem,
-  onSave,
   onClose
 }) {
   const editable = role !== 'admin';
@@ -67,17 +66,7 @@ export default function LotUnitView({
               {typo.label} · {done}/{total} · {pct}%
             </p>
           </div>
-          {editable && onSave ? (
-            <button
-              onClick={onSave}
-              className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold text-sm px-3 py-2 rounded-lg shadow active:scale-95 flex items-center gap-1 flex-shrink-0"
-              title="Sauvegarder le contrôle signé"
-            >
-              <span aria-hidden>💾</span>
-            </button>
-          ) : (
-            <div className="w-[44px]" />
-          )}
+          <div className="w-[44px]" />
         </div>
         <div className="px-4 pb-3">
           <div className="w-full bg-blue-950/60 rounded-full h-2 overflow-hidden">

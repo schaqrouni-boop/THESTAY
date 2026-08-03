@@ -141,45 +141,113 @@ function drawInfoBlock(doc, { technicianName, dateStr, globalDone, globalTotal }
 
 // --------- Pied de page : signature + n° page ---------
 
-function drawSignatureAndFooter(doc, { signatureDataUrl, technicianName, dateStr }) {
+function drawPageNumber(doc) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const y = pageH - 50;
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(...GRAY);
+  doc.text(
+    `Page ${doc.internal.getCurrentPageInfo().pageNumber}`,
+    pageW - 12,
+    pageH - 6,
+    { align: 'right' }
+  );
+}
 
+function drawSignatureAndFooter(
+  doc,
+  { signatureDataUrl, technicianName, dateStr, companyName, companyRepName, companySignatureDataUrl }
+) {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const hasSecond = !!(companySignatureDataUrl || companyName || companyRepName);
+
+  if (!hasSecond) {
+    // --- Signature unique (contrôle technicien) ---
+    const y = pageH - 50;
+    doc.setDrawColor(...SLATE);
+    doc.setLineWidth(0.3);
+    doc.line(10, y, pageW - 10, y);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...SLATE);
+    doc.setFontSize(10);
+    doc.text('Signature du technicien', 12, y + 7);
+
+    const sigX = 12;
+    const sigY = y + 10;
+    const sigW = 70;
+    const sigH = 28;
+    doc.setDrawColor(...GRAY);
+    doc.roundedRect(sigX, sigY, sigW, sigH, 1, 1, 'S');
+    if (signatureDataUrl) {
+      try {
+        doc.addImage(signatureDataUrl, 'PNG', sigX + 1, sigY + 1, sigW - 2, sigH - 2);
+      } catch (e) {
+        console.warn('Signature non insérée', e);
+      }
+    }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...SLATE);
+    doc.text(`Nom : ${technicianName || '—'}`, sigX + sigW + 6, sigY + 8);
+    doc.text(`Date : ${dateStr}`, sigX + sigW + 6, sigY + 16);
+    doc.text('Lu et approuvé', sigX + sigW + 6, sigY + 24);
+
+    drawPageNumber(doc);
+    return;
+  }
+
+  // --- Double signature (réception co-signée THE STAY + entreprise) ---
+  const y = pageH - 56;
   doc.setDrawColor(...SLATE);
   doc.setLineWidth(0.3);
   doc.line(10, y, pageW - 10, y);
 
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...SLATE);
-  doc.setFontSize(10);
-  doc.text('Signature du technicien', 12, y + 7);
-
-  const sigX = 12;
-  const sigY = y + 10;
-  const sigW = 70;
-  const sigH = 28;
-  doc.setDrawColor(...GRAY);
-  doc.roundedRect(sigX, sigY, sigW, sigH, 1, 1, 'S');
-  if (signatureDataUrl) {
-    try {
-      doc.addImage(signatureDataUrl, 'PNG', sigX + 1, sigY + 1, sigW - 2, sigH - 2);
-    } catch (e) {
-      console.warn('Signature non insérée', e);
+  const boxW = (pageW - 24 - 8) / 2; // 2 colonnes, marges 12 + gap 8
+  const boxH = 22;
+  const titleY = y + 4;
+  const sigY = y + 6;
+  const cols = [
+    {
+      x: 12,
+      title: 'Réceptionné par — THE STAY',
+      name: technicianName,
+      sig: signatureDataUrl
+    },
+    {
+      x: 12 + boxW + 8,
+      title: `Entreprise — ${companyName || '—'}`,
+      name: companyRepName,
+      sig: companySignatureDataUrl
     }
+  ];
+  for (const c of cols) {
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...SLATE);
+    doc.setFontSize(8.5);
+    doc.text(c.title, c.x, titleY, { maxWidth: boxW });
+    doc.setDrawColor(...GRAY);
+    doc.roundedRect(c.x, sigY, boxW, boxH, 1, 1, 'S');
+    if (c.sig) {
+      try {
+        doc.addImage(c.sig, 'PNG', c.x + 1, sigY + 1, boxW - 2, boxH - 2);
+      } catch (e) {
+        console.warn('Signature non insérée', e);
+      }
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(...SLATE);
+    doc.text(`Nom : ${c.name || '—'}`, c.x, sigY + boxH + 4, { maxWidth: boxW });
   }
-
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8.5);
   doc.setTextColor(...SLATE);
-  doc.text(`Nom : ${technicianName || '—'}`, sigX + sigW + 6, sigY + 8);
-  doc.text(`Date : ${dateStr}`, sigX + sigW + 6, sigY + 16);
-  doc.text('Lu et approuvé', sigX + sigW + 6, sigY + 24);
+  doc.text(`Date : ${dateStr} — Lu et approuvé`, 12, sigY + boxH + 10);
 
-  doc.setFontSize(8);
-  doc.setTextColor(...GRAY);
-  const pageStr = `Page ${doc.internal.getCurrentPageInfo().pageNumber}`;
-  doc.text(pageStr, pageW - 12, pageH - 6, { align: 'right' });
+  drawPageNumber(doc);
 }
 
 // --------- Table d'un groupe (ou ungrouped) pour une typologie ---------
@@ -403,6 +471,9 @@ export async function generateReport({
   state,
   technicianName,
   signatureDataUrl,
+  companyName = null,
+  companyRepName = null,
+  companySignatureDataUrl = null,
   includePhotos = true,
   sessionId = 'draft'
 }) {
@@ -529,7 +600,14 @@ export async function generateReport({
     if (p > 1) {
       await drawHeader(doc, title);
     }
-    drawSignatureAndFooter(doc, { signatureDataUrl, technicianName, dateStr });
+    drawSignatureAndFooter(doc, {
+      signatureDataUrl,
+      technicianName,
+      dateStr,
+      companyName,
+      companyRepName,
+      companySignatureDataUrl
+    });
   }
 
   const blob = doc.output('blob');

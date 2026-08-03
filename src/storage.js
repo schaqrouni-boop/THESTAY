@@ -126,6 +126,58 @@ export function subscribeSnapshots(onInsert) {
   };
 }
 
+// === RÉCEPTIONS DE LOT (co-signées : THE STAY + entreprise) ===
+
+function mapLotReceptionRow(row) {
+  return {
+    id: row.id,
+    createdAt: new Date(row.created_at).getTime(),
+    lotId: row.lot_id,
+    technicianName: row.technician_name,
+    technicianSignature: row.technician_signature,
+    companyName: row.company_name,
+    companyRepName: row.company_rep_name,
+    companySignature: row.company_signature,
+    snapshot: row.snapshot || null
+  };
+}
+
+export async function createLotReception({
+  lotId,
+  technicianName,
+  technicianSignature,
+  companyName,
+  companyRepName,
+  companySignature,
+  snapshot
+}) {
+  const { data, error } = await supabase
+    .from('lot_receptions')
+    .insert({
+      lot_id: lotId,
+      technician_name: technicianName,
+      technician_signature: technicianSignature,
+      company_name: companyName,
+      company_rep_name: companyRepName,
+      company_signature: companySignature,
+      snapshot: snapshot || null
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapLotReceptionRow(data);
+}
+
+export async function listLotReceptions(lotId) {
+  const { data, error } = await supabase
+    .from('lot_receptions')
+    .select('*')
+    .eq('lot_id', lotId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(mapLotReceptionRow);
+}
+
 // === PHOTOS ===
 
 async function attachUrls(rows) {

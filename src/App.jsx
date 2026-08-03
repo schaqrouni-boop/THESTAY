@@ -715,35 +715,16 @@ export default function App() {
 
   if (view.type === 'lotUnit') {
     return (
-      <>
-        <LotUnitView
-          lotId={view.lotId}
-          typoId={view.typoId}
-          unitId={view.unitId}
-          state={state}
-          role={role}
-          photosKey={photosKey}
-          onToggleItem={toggleItem}
-          onSave={role === 'admin' ? null : () => setSaveOpen(true)}
-          onClose={() => setView({ type: 'lotDetail', lotId: view.lotId })}
-        />
-        {role !== 'admin' && (
-          <SaveModal
-            open={saveOpen}
-            onClose={() => setSaveOpen(false)}
-            state={state}
-            technicianName={displayName}
-            onSaved={handleSaved}
-          />
-        )}
-        {toast && (
-          <div className="fixed bottom-20 inset-x-0 px-4 z-50">
-            <div className="mx-auto max-w-md bg-green-700 text-white font-semibold px-4 py-3 rounded-lg shadow-2xl">
-              ✓ {toast}
-            </div>
-          </div>
-        )}
-      </>
+      <LotUnitView
+        lotId={view.lotId}
+        typoId={view.typoId}
+        unitId={view.unitId}
+        state={state}
+        role={role}
+        photosKey={photosKey}
+        onToggleItem={toggleItem}
+        onClose={() => setView({ type: 'lotDetail', lotId: view.lotId })}
+      />
     );
   }
 
