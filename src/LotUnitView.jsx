@@ -10,7 +10,18 @@ function statusColor(pct) {
   return { bar: 'bg-orange-500', text: 'text-orange-700', border: 'border-orange-400' };
 }
 
-export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
+export default function LotUnitView({
+  lotId,
+  typoId,
+  unitId,
+  state,
+  role,
+  photosKey,
+  onToggleItem,
+  onSave,
+  onClose
+}) {
+  const editable = role !== 'admin';
   const lot = LOTS.find((l) => l.id === lotId);
   const typo = TYPOLOGIES.find((t) => t.id === typoId);
 
@@ -56,7 +67,17 @@ export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
               {typo.label} · {done}/{total} · {pct}%
             </p>
           </div>
-          <div className="w-[44px]" />
+          {editable && onSave ? (
+            <button
+              onClick={onSave}
+              className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold text-sm px-3 py-2 rounded-lg shadow active:scale-95 flex items-center gap-1 flex-shrink-0"
+              title="Sauvegarder le contrôle signé"
+            >
+              <span aria-hidden>💾</span>
+            </button>
+          ) : (
+            <div className="w-[44px]" />
+          )}
         </div>
         <div className="px-4 pb-3">
           <div className="w-full bg-blue-950/60 rounded-full h-2 overflow-hidden">
@@ -103,13 +124,22 @@ export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
                     const checked = !!values?.[it.key];
                     return (
                       <li key={it.key}>
-                        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                        <label
+                          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 ${
+                            editable
+                              ? 'hover:bg-slate-100 active:bg-slate-200 cursor-pointer tap-target'
+                              : ''
+                          }`}
+                        >
                           <input
                             type="checkbox"
                             className="big-check flex-shrink-0"
                             checked={checked}
-                            disabled
-                            readOnly
+                            onChange={() =>
+                              editable && onToggleItem?.(typoId, unitId, lotId, it.key)
+                            }
+                            disabled={!editable}
+                            readOnly={!editable}
                           />
                           <span
                             className={`text-sm flex-1 ${
@@ -121,7 +151,7 @@ export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
                           {checked && (
                             <span className="text-green-600 text-lg font-bold flex-shrink-0">✓</span>
                           )}
-                        </div>
+                        </label>
                       </li>
                     );
                   })}
@@ -133,13 +163,18 @@ export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
 
         <div className="bg-white rounded-2xl shadow-sm border-2 border-slate-200 p-3">
           <PhotosSection
+            key={editable ? photosKey : 'ro'}
             typoId={typoId}
             unitId={unitId}
             section={lotId}
             enabled={true}
-            readOnly={true}
-            sessionId="all"
-            labelOverride={`Historique photos ${lot.short.toLowerCase()}`}
+            readOnly={!editable}
+            sessionId={editable ? 'draft' : 'all'}
+            labelOverride={
+              editable
+                ? `Photos ${lot.short.toLowerCase()}`
+                : `Historique photos ${lot.short.toLowerCase()}`
+            }
           />
         </div>
       </main>

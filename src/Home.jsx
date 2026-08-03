@@ -19,6 +19,26 @@ function typoProgress(state, typo) {
   return { done, total };
 }
 
+// Progression d'un lot agrégée sur toutes les typologies/unités concernées.
+function lotProgress(state, lot) {
+  let done = 0;
+  let total = 0;
+  let units = 0;
+  for (const t of TYPOLOGIES) {
+    for (const u of t.units) {
+      const items = flatItemsForLot(t.id, lot.id, u);
+      if (!items.length) continue;
+      units += 1;
+      const us = state?.[t.id]?.[u]?.[lot.id] || {};
+      for (const it of items) {
+        total += 1;
+        if (us[it.key]) done += 1;
+      }
+    }
+  }
+  return { done, total, units };
+}
+
 function statusColor(pct) {
   if (pct === 0) return { bar: 'bg-slate-400', text: 'text-slate-600', border: 'border-slate-300' };
   if (pct >= 100) return { bar: 'bg-green-600', text: 'text-green-700', border: 'border-green-500' };
@@ -32,9 +52,20 @@ const ICONS = {
   couloirs: '🛗'
 };
 
-export default function Home({ user, role, state, onSelectTypology, onOpenHistory, onOpenLotDashboard, onLogout, refreshKey }) {
+export default function Home({
+  user,
+  role,
+  state,
+  onSelectTypology,
+  onSelectLotReception,
+  onOpenHistory,
+  onOpenLotDashboard,
+  onLogout,
+  refreshKey
+}) {
   const [snapshotCount, setSnapshotCount] = useState(0);
   const [lastSnapshot, setLastSnapshot] = useState(null);
+  const [mode, setMode] = useState('unite'); // 'unite' | 'lot' — sélection réception (technicien)
 
   useEffect(() => {
     (async () => {
@@ -61,6 +92,16 @@ export default function Home({ user, role, state, onSelectTypology, onOpenHistor
 
   const overallPct = overall.total === 0 ? 0 : Math.round((overall.done / overall.total) * 100);
 
+  const isAdmin = role === 'admin';
+  // L'admin garde son parcours actuel (typologies + administration).
+  // Le technicien choisit son axe de réception : par unité ou par lot.
+  const showTypologies = isAdmin || mode === 'unite';
+  const showLots = !isAdmin && mode === 'lot';
+
+  const lotCards = LOTS.map((lot) => ({ lot, prog: lotProgress(state, lot) })).filter(
+    (x) => x.prog.total > 0
+  );
+
   return (
     <div className="min-h-full flex flex-col bg-slate-100">
       <header className="bg-blue-800 text-white shadow-lg">
@@ -73,7 +114,7 @@ export default function Home({ user, role, state, onSelectTypology, onOpenHistor
               <div className="min-w-0">
                 <h1 className="text-base font-bold leading-tight truncate">Suivi Chantier</h1>
                 <p className="text-[11px] text-blue-100">
-                  {role === 'admin' ? 'Administration' : 'Réception travaux'} · {user}
+                  {isAdmin ? 'Administration' : 'Réception travaux'} · {user}
                 </p>
               </div>
             </div>
@@ -104,50 +145,130 @@ export default function Home({ user, role, state, onSelectTypology, onOpenHistor
       </header>
 
       <main className="flex-1 px-4 py-6 pb-24">
-        <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
-          Choisir une typologie
-        </h2>
+        {/* Sélecteur de mode de réception (technicien uniquement) */}
+        {!isAdmin && (
+          <div className="grid grid-cols-2 gap-2 mb-5">
+            {[
+              { id: 'unite', label: 'Réception par unité', icon: '🏢' },
+              { id: 'lot', label: 'Réception par lot', icon: '🛠️' }
+            ].map((m) => {
+              const active = mode === m.id;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setMode(m.id)}
+                  className={`rounded-xl px-3 py-3 text-sm font-bold border-2 transition-colors tap-target ${
+                    active
+                      ? 'bg-blue-800 text-white border-blue-800 shadow'
+                      : 'bg-white text-slate-700 border-slate-300 active:bg-slate-100'
+                  }`}
+                >
+                  <span className="text-xl block mb-0.5" aria-hidden>{m.icon}</span>
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {TYPOLOGIES.map((t) => {
-            const { done, total } = typoProgress(state, t);
-            const pct = total === 0 ? 0 : Math.round((done / total) * 100);
-            const c = statusColor(pct);
-            return (
-              <button
-                key={t.id}
-                onClick={() => onSelectTypology(t.id)}
-                className={`bg-white rounded-2xl shadow-md border-2 ${c.border} active:scale-[0.98] transition-transform p-4 text-left tap-target`}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="text-4xl" aria-hidden>
-                    {ICONS[t.id] || '🏢'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg text-slate-900 leading-tight">{t.label}</h3>
-                    <p className="text-xs text-slate-500 mt-0.5">{t.units.length} unités</p>
-                    <div className="mt-3 flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div
-                          className={`${c.bar} h-2 transition-all duration-300`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className={`text-xs font-semibold whitespace-nowrap ${c.text}`}>
-                        {pct}%
+        {showTypologies && (
+          <>
+            <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
+              {isAdmin ? 'Choisir une typologie' : 'Choisir une unité — par typologie'}
+            </h2>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {TYPOLOGIES.map((t) => {
+                const { done, total } = typoProgress(state, t);
+                const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+                const c = statusColor(pct);
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => onSelectTypology(t.id)}
+                    className={`bg-white rounded-2xl shadow-md border-2 ${c.border} active:scale-[0.98] transition-transform p-4 text-left tap-target`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-4xl" aria-hidden>
+                        {ICONS[t.id] || '🏢'}
                       </span>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-lg text-slate-900 leading-tight">{t.label}</h3>
+                        <p className="text-xs text-slate-500 mt-0.5">{t.units.length} unités</p>
+                        <div className="mt-3 flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className={`${c.bar} h-2 transition-all duration-300`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-semibold whitespace-nowrap ${c.text}`}>
+                            {pct}%
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {done}/{total} points
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {done}/{total} points
-                    </p>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
-        {role === 'admin' && (
+        {showLots && (
+          <>
+            <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
+              Choisir un lot — corps de métier
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {lotCards.map(({ lot, prog }) => {
+                const pct = prog.total === 0 ? 0 : Math.round((prog.done / prog.total) * 100);
+                const c = statusColor(pct);
+                return (
+                  <button
+                    key={lot.id}
+                    onClick={() => onSelectLotReception(lot.id)}
+                    className={`bg-white rounded-2xl shadow-md border-2 ${c.border} active:scale-[0.98] transition-transform p-4 text-left tap-target`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="text-4xl" aria-hidden>
+                        {lot.icon}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-bold text-base text-slate-900 leading-tight">
+                          {lot.label}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {prog.units} unité{prog.units > 1 ? 's' : ''} concernée
+                          {prog.units > 1 ? 's' : ''}
+                        </p>
+                        <div className="mt-3 flex items-center gap-2">
+                          <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                            <div
+                              className={`${c.bar} h-2 transition-all duration-300`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className={`text-xs font-semibold whitespace-nowrap ${c.text}`}>
+                            {pct}%
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {prog.done}/{prog.total} points
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {isAdmin && (
           <div className="mt-6 space-y-3">
             <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
               Administration
@@ -163,7 +284,7 @@ export default function Home({ user, role, state, onSelectTypology, onOpenHistor
                     Suivi par corps de métier
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Progression des 9 lots agrégée sur toutes les typologies
+                    Progression des lots agrégée sur toutes les typologies
                   </p>
                   <p className="text-xs text-blue-700 font-semibold mt-2">
                     Voir la vue lots →
@@ -201,7 +322,7 @@ export default function Home({ user, role, state, onSelectTypology, onOpenHistor
       </main>
 
       <footer className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-4 py-2 text-center text-xs text-slate-500">
-        Données enregistrées localement · {user} ({role === 'admin' ? 'admin' : 'technicien'})
+        {user} · {isAdmin ? 'admin' : 'technicien'}
       </footer>
     </div>
   );

@@ -37,7 +37,8 @@ async function shareOrDownload(file, title) {
   return 'downloaded';
 }
 
-export default function LotDetailView({ lotId, state, adminName, onSelectUnit, onClose }) {
+export default function LotDetailView({ lotId, state, role, adminName, onSelectUnit, onClose }) {
+  const isAdmin = role === 'admin';
   const lot = LOTS.find((l) => l.id === lotId);
   const [photoCounts, setPhotoCounts] = useState({});
   const [busy, setBusy] = useState(false);
@@ -194,7 +195,13 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
       </header>
 
       <main className="flex-1 px-3 py-3 pb-24 space-y-4">
-        {lot.excludeFromReports ? (
+        {!isAdmin ? (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3 text-center">
+            <p className="text-sm font-semibold text-blue-900">
+              Touchez une unité pour faire la réception de ce lot.
+            </p>
+          </div>
+        ) : lot.excludeFromReports ? (
           <div className="bg-slate-100 border-2 border-slate-300 rounded-xl p-4 text-center">
             <p className="text-sm font-semibold text-slate-700">
               Ce lot n'est pas inclus dans les rapports PDF.
@@ -235,10 +242,12 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
           </div>
         )}
 
-        <p className="text-[11px] text-slate-500 text-center px-2">
-          Le PDF contient l'état d'avancement actuel du lot par unité + toutes les photos prises
-          (état non signé, version brouillon).
-        </p>
+        {isAdmin && (
+          <p className="text-[11px] text-slate-500 text-center px-2">
+            Le PDF contient l'état d'avancement actuel du lot par unité + toutes les photos prises
+            (état non signé, version brouillon).
+          </p>
+        )}
 
         {byTypology.map(({ typo, units, done, total, totalPhotos }) => {
           const pct = total === 0 ? 0 : Math.round((done / total) * 100);
