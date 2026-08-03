@@ -17,7 +17,7 @@ export const LOTS = [
   { id: 'climatisation_climasec',   label: 'Climatisation Climasec',   short: 'Clim.',    icon: '❄️' },
   { id: 'peinture',                 label: 'Peinture',                 short: 'Peinture', icon: '🎨' },
   { id: 'marbre_carreaux',          label: 'Marbre et Carreaux',       short: 'Marbre',   icon: '🪨' },
-  { id: 'cabines_miroirs',          label: 'Cabines et Miroirs',       short: 'Cabines',  icon: '🪞' },
+  { id: 'cabines_miroirs',          label: 'Miroirs',                  short: 'Miroirs',  icon: '🪞' },
   { id: 'garde_corps_cabines',      label: 'Garde-Corps et Cabines Verre', short: 'Verre', icon: '🪟' }
 ];
 
