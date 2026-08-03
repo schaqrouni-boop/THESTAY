@@ -17,7 +17,8 @@ export const LOTS = [
   { id: 'climatisation_climasec',   label: 'Climatisation Climasec',   short: 'Clim.',    icon: '❄️' },
   { id: 'peinture',                 label: 'Peinture',                 short: 'Peinture', icon: '🎨' },
   { id: 'marbre_carreaux',          label: 'Marbre et Carreaux',       short: 'Marbre',   icon: '🪨' },
-  { id: 'cabines_miroirs',          label: 'Cabines et Miroirs',       short: 'Cabines',  icon: '🪞' }
+  { id: 'cabines_miroirs',          label: 'Cabines et Miroirs',       short: 'Cabines',  icon: '🪞' },
+  { id: 'garde_corps_cabines',      label: 'Garde-Corps et Cabines Verre', short: 'Verre', icon: '🪟' }
 ];
 
 // Cuisine Woodymar — identique pour toutes les typologies.
@@ -70,7 +71,18 @@ const CLIMATISATION = [
   'Pose Grille Climatisation'
 ];
 
-const CABINES_MIROIRS = ['Miroir SDB', 'Cabine SDB'];
+const CABINES_MIROIRS = ['Miroir SDB'];
+
+// Lot "Garde-Corps et Cabines Verre".
+// - Cabines de douche : s'applique à toutes les unités avec douche (studio/2C/3C).
+// - Garde-Corps : uniquement certaines unités (tous les 3C + 5 unités 2C listées).
+//   Porté par la clé `onlyUnits` sur le groupe → filtré par unité dans les calculs.
+const CABINE_DOUCHE_GROUP = {
+  group: 'Cabines de douche',
+  items: ['Pose Verre & Profilé', 'Joint', 'Accessoires']
+};
+const GARDE_CORPS_ITEMS = ['Pose', 'Ajustage'];
+const GARDE_CORPS_2C_UNITS = ['A12', 'A22', 'A32', 'A42', 'A52'];
 
 // --- Items par lot et par typologie ---
 
@@ -121,7 +133,8 @@ export const LOT_ITEMS = {
       'Plinthes Terrasse',
       'Nettoyage Carreaux SDB'
     ],
-    cabines_miroirs: CABINES_MIROIRS
+    cabines_miroirs: CABINES_MIROIRS,
+    garde_corps_cabines: [CABINE_DOUCHE_GROUP]
   },
 
   appt2c: {
@@ -196,7 +209,11 @@ export const LOT_ITEMS = {
       'Lustrage Marbre',
       'Nettoyage Carreaux SDB'
     ],
-    cabines_miroirs: CABINES_MIROIRS
+    cabines_miroirs: CABINES_MIROIRS,
+    garde_corps_cabines: [
+      { group: 'Garde-Corps', onlyUnits: GARDE_CORPS_2C_UNITS, items: GARDE_CORPS_ITEMS },
+      CABINE_DOUCHE_GROUP
+    ]
   },
 
   couloirs: {
@@ -325,7 +342,11 @@ export const LOT_ITEMS = {
       'Lustrage Marbre',
       'Nettoyage Carreaux SDB'
     ],
-    cabines_miroirs: CABINES_MIROIRS
+    cabines_miroirs: CABINES_MIROIRS,
+    garde_corps_cabines: [
+      { group: 'Garde-Corps', items: GARDE_CORPS_ITEMS },
+      CABINE_DOUCHE_GROUP
+    ]
   }
 };
 
@@ -370,7 +391,11 @@ export const TYPOLOGIES = [
 
 // Sépare la définition brute en groupes ordonnés pour l'affichage.
 // Renvoie : [{ group: string|null, items: [{ key, label }] }, ...]
-export function groupsForLot(typoId, lotId) {
+// unitId optionnel : si fourni, les groupes restreints (`onlyUnits`) qui ne
+// concernent pas cette unité sont exclus. Si null, tous les groupes sont
+// renvoyés (avec `onlyUnits` conservé pour que les vues multi-unités puissent
+// filtrer elles-mêmes, ex. tableaux PDF).
+export function groupsForLot(typoId, lotId, unitId = null) {
   const config = LOT_ITEMS[typoId]?.[lotId] || [];
   const out = [];
   let ungroupedBucket = null;
@@ -382,9 +407,14 @@ export function groupsForLot(typoId, lotId) {
       }
       ungroupedBucket.items.push({ key: entry, label: entry });
     } else if (entry && typeof entry === 'object' && Array.isArray(entry.items)) {
+      // Groupe restreint à certaines unités : masqué si on cible une unité hors liste.
+      if (entry.onlyUnits && unitId && !entry.onlyUnits.includes(unitId)) {
+        continue;
+      }
       ungroupedBucket = null; // un groupe nommé clôt le bucket courant
       out.push({
         group: entry.group,
+        onlyUnits: entry.onlyUnits || null,
         items: entry.items.map((it) => ({
           key: `${entry.group} — ${it}`,
           label: it
@@ -397,8 +427,8 @@ export function groupsForLot(typoId, lotId) {
 
 // Aplatissement avec clé unique par item — sert au calcul de progression et au PDF.
 // Renvoie : [{ key, label, group }]
-export function flatItemsForLot(typoId, lotId) {
-  const groups = groupsForLot(typoId, lotId);
+export function flatItemsForLot(typoId, lotId, unitId = null) {
+  const groups = groupsForLot(typoId, lotId, unitId);
   const out = [];
   for (const g of groups) {
     for (const it of g.items) {
@@ -408,8 +438,8 @@ export function flatItemsForLot(typoId, lotId) {
   return out;
 }
 
-export function totalItemsForLot(typoId, lotId) {
-  return flatItemsForLot(typoId, lotId).length;
+export function totalItemsForLot(typoId, lotId, unitId = null) {
+  return flatItemsForLot(typoId, lotId, unitId).length;
 }
 
 // Retourne uniquement les lots qui ont des items pour la typologie donnée.

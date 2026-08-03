@@ -20,16 +20,17 @@ function computeLotStats(state, lot) {
   const typoBreakdown = [];
 
   for (const t of TYPOLOGIES) {
-    const items = flatItemsForLot(t.id, lot.id);
-    if (!items.length) continue;
-
     let typoDone = 0;
     let typoTotal = 0;
     let tUnitsDone = 0;
     let tUnitsInProgress = 0;
     let tUnitsTodo = 0;
+    let tUnitsConcerned = 0;
 
     for (const u of t.units) {
+      const items = flatItemsForLot(t.id, lot.id, u);
+      if (!items.length) continue; // unité non concernée par ce lot
+      tUnitsConcerned += 1;
       const us = state?.[t.id]?.[u]?.[lot.id] || {};
       const itemsDone = items.filter((it) => us[it.key]).length;
       done += itemsDone;
@@ -48,6 +49,8 @@ function computeLotStats(state, lot) {
       }
     }
 
+    if (typoTotal === 0) continue; // lot non applicable à cette typologie
+
     typoBreakdown.push({
       typoId: t.id,
       typoLabel: t.label,
@@ -56,7 +59,7 @@ function computeLotStats(state, lot) {
       unitsDone: tUnitsDone,
       unitsInProgress: tUnitsInProgress,
       unitsTodo: tUnitsTodo,
-      totalUnits: t.units.length
+      totalUnits: tUnitsConcerned
     });
   }
 

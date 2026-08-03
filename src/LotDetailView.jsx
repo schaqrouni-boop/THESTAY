@@ -65,18 +65,20 @@ export default function LotDetailView({ lotId, state, adminName, onSelectUnit, o
     if (!lot) return [];
     const rows = [];
     for (const t of TYPOLOGIES) {
-      const items = flatItemsForLot(t.id, lot.id);
-      if (!items.length) continue;
-      const units = t.units.map((u) => {
+      const units = [];
+      for (const u of t.units) {
+        const items = flatItemsForLot(t.id, lot.id, u);
+        if (!items.length) continue; // unité non concernée par ce lot
         const us = state?.[t.id]?.[u]?.[lot.id] || {};
         const done = items.filter((it) => us[it.key]).length;
-        return {
+        units.push({
           unitId: u,
           done,
           total: items.length,
           photoCount: photoCounts[`${t.id}|${u}`] || 0
-        };
-      });
+        });
+      }
+      if (!units.length) continue;
       const done = units.reduce((s, x) => s + x.done, 0);
       const total = units.reduce((s, x) => s + x.total, 0);
       const totalPhotos = units.reduce((s, x) => s + x.photoCount, 0);

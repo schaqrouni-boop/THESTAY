@@ -98,7 +98,7 @@ function migrateCuisineGroups(state) {
 // ---------- Helpers progression ----------
 
 function lotProgress(state, typoId, unitId, lotId) {
-  const items = flatItemsForLot(typoId, lotId);
+  const items = flatItemsForLot(typoId, lotId, unitId);
   const us = state?.[typoId]?.[unitId]?.[lotId] || {};
   const done = items.filter((it) => us[it.key]).length;
   return { done, total: items.length };
@@ -213,7 +213,7 @@ function LotChecklist({ groups, values, onToggle, readOnly }) {
 
 function LotSection({ typoId, unitId, lot, state, onToggleItem, readOnly, photosKey }) {
   const [open, setOpen] = useState(false);
-  const groups = useMemo(() => groupsForLot(typoId, lot.id), [typoId, lot.id]);
+  const groups = useMemo(() => groupsForLot(typoId, lot.id, unitId), [typoId, lot.id, unitId]);
   const { done, total } = lotProgress(state, typoId, unitId, lot.id);
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   const status = unitStatus(done, total);
@@ -611,7 +611,7 @@ export default function App() {
       for (const unit of typo.units) {
         const us = state?.[typo.id]?.[unit] || {};
         for (const lot of LOTS) {
-          const items = flatItemsForLot(typo.id, lot.id);
+          const items = flatItemsForLot(typo.id, lot.id, unit);
           const lotState = us[lot.id] || {};
           for (const it of items) {
             rows.push([

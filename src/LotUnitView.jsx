@@ -30,9 +30,9 @@ export default function LotUnitView({ lotId, typoId, unitId, state, onClose }) {
     );
   }
 
-  const groups = groupsForLot(typoId, lotId);
+  const groups = groupsForLot(typoId, lotId, unitId);
   const values = state?.[typoId]?.[unitId]?.[lotId] || {};
-  const items = flatItemsForLot(typoId, lotId);
+  const items = flatItemsForLot(typoId, lotId, unitId);
   const done = items.filter((it) => values[it.key]).length;
   const total = items.length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);

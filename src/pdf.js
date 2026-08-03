@@ -189,7 +189,12 @@ function drawGroupTable(doc, { typology, lotId, group, state, startY }) {
   const head = [['Unité', ...items.map((i) => i.label), 'État']];
   const body = [];
 
-  for (const unit of typology.units) {
+  // Groupe restreint (ex. Garde-Corps) : ne montrer que les unités concernées.
+  const units = group.onlyUnits
+    ? typology.units.filter((u) => group.onlyUnits.includes(u))
+    : typology.units;
+
+  for (const unit of units) {
     const us = state?.[typology.id]?.[unit]?.[lotId] || {};
     let done = 0;
     const row = [unit];
@@ -412,8 +417,9 @@ export async function generateReport({
   let globalDone = 0;
   let globalTotal = 0;
   for (const t of TYPOLOGIES) {
-    const items = flatItemsForLot(t.id, lotId);
     for (const u of t.units) {
+      const items = flatItemsForLot(t.id, lotId, u);
+      if (!items.length) continue;
       const us = state?.[t.id]?.[u]?.[lotId] || {};
       for (const it of items) {
         globalTotal += 1;
@@ -460,6 +466,10 @@ export async function generateReport({
 
     for (const group of groups) {
       if (!group.items.length) continue;
+      // Groupe restreint sans aucune unité concernée dans cette typologie → on saute.
+      if (group.onlyUnits && !typology.units.some((u) => group.onlyUnits.includes(u))) {
+        continue;
+      }
 
       if (group.group) {
         if (cursorY > pageH - 70) {
@@ -551,8 +561,9 @@ export async function generateMissingReport({
   let globalDone = 0;
   let globalTotal = 0;
   for (const t of TYPOLOGIES) {
-    const items = flatItemsForLot(t.id, lotId);
     for (const u of t.units) {
+      const items = flatItemsForLot(t.id, lotId, u);
+      if (!items.length) continue;
       const us = state?.[t.id]?.[u]?.[lotId] || {};
       for (const it of items) {
         globalTotal += 1;
@@ -578,12 +589,11 @@ export async function generateMissingReport({
     doc.text('Lot 100% terminé', pageW / 2, 132, { align: 'center' });
   } else {
     for (const typology of TYPOLOGIES) {
-      const items = flatItemsForLot(typology.id, lotId);
-      if (!items.length) continue;
-
-      // Calcul par unité
+      // Calcul par unité (les items peuvent varier d'une unité à l'autre)
       const unitsWithMissing = [];
       for (const unitId of typology.units) {
+        const items = flatItemsForLot(typology.id, lotId, unitId);
+        if (!items.length) continue;
         const us = state?.[typology.id]?.[unitId]?.[lotId] || {};
         const done = items.filter((it) => us[it.key]).length;
         const missing = items.filter((it) => !us[it.key]);

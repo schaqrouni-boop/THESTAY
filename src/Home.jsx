@@ -6,9 +6,9 @@ function typoProgress(state, typo) {
   let done = 0;
   let total = 0;
   for (const lot of LOTS) {
-    const items = flatItemsForLot(typo.id, lot.id);
-    if (!items.length) continue;
     for (const u of typo.units) {
+      const items = flatItemsForLot(typo.id, lot.id, u);
+      if (!items.length) continue;
       const us = state?.[typo.id]?.[u]?.[lot.id] || {};
       for (const it of items) {
         total += 1;

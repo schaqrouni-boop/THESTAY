@@ -55,9 +55,9 @@ function lotsCheckedCount(state) {
   for (const lot of LOTS) counts[lot.id] = 0;
   for (const t of TYPOLOGIES) {
     for (const lot of LOTS) {
-      const items = flatItemsForLot(t.id, lot.id);
-      if (!items.length) continue;
       for (const u of t.units) {
+        const items = flatItemsForLot(t.id, lot.id, u);
+        if (!items.length) continue;
         const us = state?.[t.id]?.[u]?.[lot.id] || {};
         for (const it of items) {
           if (us[it.key]) counts[lot.id] += 1;
