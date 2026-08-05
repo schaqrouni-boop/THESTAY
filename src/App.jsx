@@ -36,6 +36,7 @@ function migrateQuincaillerie(state) {
   let changed = false;
   const next = JSON.parse(JSON.stringify(state));
   for (const typoId of Object.keys(next)) {
+    if (typoId === '_migrations') continue;
     const typoBlock = next[typoId];
     if (!typoBlock) continue;
     for (const unitId of Object.keys(typoBlock)) {
@@ -57,42 +58,32 @@ function migrateQuincaillerie(state) {
   return { state: next, changed };
 }
 
-// ---------- Migration : purge des anciennes données Cuisine Woodymar ----------
-// La cuisine est passée d'items plats ("Caissons Hauts posés") à des items
-// groupés (clés "Groupe — Item"). À la demande, on NE reporte PAS les anciennes
-// coches : on vide les anciennes clés plates de cuisine_woodymar — et seulement
-// ce lot. Idempotent : une fois les anciennes clés supprimées, les passages
-// suivants sont sans effet, et les nouvelles clés groupées ne sont jamais touchées.
-const CUISINE_OLD_KEYS = [
-  'Caissons Hauts posés',
-  'Caissons Bas posés',
-  'Portes Hautes posées',
-  'Portes Basses posées',
-  'Electroménager posé',
-  'LEDs Caissons posés',
-  'Crédence Posée',
-  'Plan de travail posé'
-];
+// ---------- Migration : purge complète des données Cuisine Woodymar ----------
+// La cuisine a été restructurée (groupes renommés + points différents Studios vs
+// 2C/3C). À la demande, on repart de ZÉRO : on vide toutes les coches du lot
+// cuisine_woodymar, une seule fois. Un marqueur stocké dans l'état (partagé via
+// le cloud) garantit que la purge ne se rejoue pas à chaque chargement — sinon
+// Nabil ne pourrait jamais conserver de coche cuisine.
+const CUISINE_PURGE_MARKER = 'cuisine_v2_purge';
 
 function migrateCuisineGroups(state) {
   if (!state || typeof state !== 'object') return { state: state || {}, changed: false };
-  let changed = false;
+  if (state._migrations?.[CUISINE_PURGE_MARKER]) return { state, changed: false };
+
   const next = JSON.parse(JSON.stringify(state));
   for (const typoId of Object.keys(next)) {
+    if (typoId === '_migrations') continue;
     const typoBlock = next[typoId];
-    if (!typoBlock) continue;
+    if (!typoBlock || typeof typoBlock !== 'object') continue;
     for (const unitId of Object.keys(typoBlock)) {
-      const cuisine = typoBlock[unitId]?.cuisine_woodymar;
-      if (!cuisine) continue;
-      for (const oldKey of CUISINE_OLD_KEYS) {
-        if (oldKey in cuisine) {
-          delete cuisine[oldKey];
-          changed = true;
-        }
+      const unitBlock = typoBlock[unitId];
+      if (unitBlock && unitBlock.cuisine_woodymar) {
+        delete unitBlock.cuisine_woodymar;
       }
     }
   }
-  return { state: next, changed };
+  next._migrations = { ...(next._migrations || {}), [CUISINE_PURGE_MARKER]: true };
+  return { state: next, changed: true };
 }
 
 // ---------- Helpers progression ----------

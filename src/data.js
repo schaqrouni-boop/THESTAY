@@ -21,30 +21,49 @@ export const LOTS = [
   { id: 'garde_corps_cabines',      label: 'Garde-Corps et Cabines Verre', short: 'Verre', icon: '🪟' }
 ];
 
-// Cuisine Woodymar — identique pour toutes les typologies.
-// Structurée en 4 sous-groupes (Haut / Bas / Led et Electroménager / Céramique).
-const CUISINE_WOODYMAR = [
-  {
-    group: 'Haut',
-    items: [
-      'Caissons Hauts posés',
-      'Portes Hautes Bois posées',
-      'Portes Hautes Verre posées',
-      'Etagères Meubles Hauts posées'
-    ]
-  },
-  {
-    group: 'Bas',
-    items: ['Caissons Bas posés', 'Portes Basses posées', 'Tiroirs Bas posés']
-  },
-  {
-    group: 'Led et Electroménager',
-    items: ['Evier Posé', 'TRIO posé', 'LEDs Caissons posés']
-  },
-  {
-    group: 'Céramique',
-    items: ['Crédence Posée', 'Plan de travail posé', 'Plinthe Plan de travail posée']
-  }
+// Cuisine Woodymar — structure DIFFÉRENTE selon la typologie.
+//  - Studios  : groupe "Colonne pour réf. enc."
+//  - 2C / 3C  : groupe "Caisson Frigo"
+// Le reste (Éléments Hauts / Bas / Led et Electroménager / Céramique & Finition)
+// est commun.
+const CUISINE_ELEMENTS_HAUTS = {
+  group: 'Eléments Hauts',
+  items: [
+    'Caissons Hauts posés',
+    'Portes Hautes Bois posées',
+    'Portes Hautes Verre posées',
+    'Etagères Meubles Hauts posées'
+  ]
+};
+const CUISINE_ELEMENTS_BAS = {
+  group: 'Eléments Bas',
+  items: ['Caissons Bas posés', 'Portes Basses posées', 'Tiroirs Bas posés']
+};
+const CUISINE_LED_ELECTRO = {
+  group: 'Led et Electroménager',
+  items: ['Evier Posé', 'TRIO posé', 'LEDs Caissons posés']
+};
+const CUISINE_CERAMIQUE = {
+  group: 'Céramique & Finition',
+  items: ['Crédence Posée', 'Mastic', 'Plan de travail posé', 'Plinthe Plan de travail posée']
+};
+
+// Studios
+const CUISINE_STUDIO = [
+  CUISINE_ELEMENTS_HAUTS,
+  CUISINE_ELEMENTS_BAS,
+  { group: 'Colonne pour réf. enc.', items: ['Caissons Bas posés'] },
+  CUISINE_LED_ELECTRO,
+  CUISINE_CERAMIQUE
+];
+
+// Appartements 2C et 3C
+const CUISINE_APPT = [
+  CUISINE_ELEMENTS_HAUTS,
+  CUISINE_ELEMENTS_BAS,
+  { group: 'Caisson Frigo', items: ['Caisson posé', 'Porte Posée'] },
+  CUISINE_LED_ELECTRO,
+  CUISINE_CERAMIQUE
 ];
 
 const PARQUET = ['Parquet', 'Plinthe et Cornière'];
@@ -88,7 +107,7 @@ const GARDE_CORPS_2C_UNITS = ['A12', 'A22', 'A32', 'A42', 'A52'];
 
 export const LOT_ITEMS = {
   studio: {
-    cuisine_woodymar: CUISINE_WOODYMAR,
+    cuisine_woodymar: CUISINE_STUDIO,
     boiserie_bibancom: [
       'Porte Entrée',
       'Porte SDB',
@@ -138,7 +157,7 @@ export const LOT_ITEMS = {
   },
 
   appt2c: {
-    cuisine_woodymar: CUISINE_WOODYMAR,
+    cuisine_woodymar: CUISINE_APPT,
     boiserie_bibancom: [
       { group: 'Entrée', items: ['Porte Entrée'] },
       {
@@ -249,7 +268,7 @@ export const LOT_ITEMS = {
   },
 
   appt3c: {
-    cuisine_woodymar: CUISINE_WOODYMAR,
+    cuisine_woodymar: CUISINE_APPT,
     boiserie_bibancom: [
       { group: 'Entrée', items: ['Porte Entrée'] },
       {
