@@ -52,7 +52,7 @@ const CUISINE_CERAMIQUE = {
 const CUISINE_STUDIO = [
   CUISINE_ELEMENTS_HAUTS,
   CUISINE_ELEMENTS_BAS,
-  { group: 'Colonne pour réf. enc.', items: ['Caissons Bas posés'] },
+  { group: 'Colonne pour réf. enc.', items: ['Etagère posée'] },
   CUISINE_LED_ELECTRO,
   CUISINE_CERAMIQUE
 ];
