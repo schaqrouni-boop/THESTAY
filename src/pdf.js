@@ -12,11 +12,48 @@ import { TYPOLOGIES, LOTS, groupsForLot, flatItemsForLot } from './data.js';
 import { getPhotosBySection } from './storage.js';
 import { blobToDataURL, loadImageEl } from './photoUtils.js';
 
-async function fetchUrlToDataUrl(url) {
+// Réduit une image (via canvas) avant intégration au PDF : accélère fortement
+// addImage et réduit la taille du fichier. Renvoie { dataUrl (JPEG), w, h }.
+async function downscaleDataUrl(srcDataUrl, maxSide = 1000, quality = 0.72) {
+  const img = await loadImageEl(srcDataUrl);
+  const w0 = img.naturalWidth || img.width;
+  const h0 = img.naturalHeight || img.height;
+  const scale = Math.min(1, maxSide / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * scale));
+  const h = Math.max(1, Math.round(h0 * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+  return { dataUrl: canvas.toDataURL('image/jpeg', quality), w, h };
+}
+
+async function fetchScaledDataUrl(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const blob = await res.blob();
-  return await blobToDataURL(blob);
+  return downscaleDataUrl(await blobToDataURL(blob));
+}
+
+// Précharge + réduit toutes les photos EN PARALLÈLE (concurrence limitée) et
+// attache le résultat sur chaque photo (p._img). Les latences réseau se
+// recouvrent au lieu de s'additionner → génération PDF beaucoup plus rapide.
+async function prefetchPhotos(photos, concurrency = 6) {
+  let idx = 0;
+  const worker = async () => {
+    while (idx < photos.length) {
+      const p = photos[idx++];
+      try {
+        if (p.url) p._img = await fetchScaledDataUrl(p.url);
+        else if (p.blob) p._img = await downscaleDataUrl(await blobToDataURL(p.blob));
+        else p._img = null;
+      } catch (e) {
+        console.warn('Préchargement photo KO', e);
+        p._img = null;
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, photos.length) }, worker));
 }
 
 const PRIMARY = [30, 64, 175];
@@ -416,24 +453,11 @@ async function drawPhotosBlock(doc, sectionLabel, photos, startY, typoLabelStr) 
     let photoIndex = 0;
     for (let i = 0; i < items.length; i++) {
       const p = items[i];
-      let dataUrl;
-      let imgW;
-      let imgH;
-      try {
-        if (p.url) {
-          dataUrl = await fetchUrlToDataUrl(p.url);
-        } else if (p.blob) {
-          dataUrl = await blobToDataURL(p.blob);
-        } else {
-          continue;
-        }
-        const img = await loadImageEl(dataUrl);
-        imgW = img.naturalWidth || img.width;
-        imgH = img.naturalHeight || img.height;
-      } catch (e) {
-        console.warn('Photo non chargée', e);
-        continue;
-      }
+      // Image déjà préchargée + réduite en parallèle (voir prefetchPhotos).
+      if (!p._img) continue;
+      const dataUrl = p._img.dataUrl;
+      const imgW = p._img.w;
+      const imgH = p._img.h;
 
       const r = Math.min(slotW / imgW, slotH / imgH);
       const drawW = imgW * r;
@@ -531,6 +555,9 @@ export async function generateReport({
   if (includePhotos) {
     try {
       const allPhotos = await getPhotosBySection(lotId, sessionId);
+      // Téléchargement + réduction de toutes les photos en parallèle (rapide),
+      // avant le dessin qui devient alors purement local.
+      await prefetchPhotos(allPhotos);
       for (const p of allPhotos) {
         if (!photosByTypo.has(p.typoId)) photosByTypo.set(p.typoId, []);
         photosByTypo.get(p.typoId).push(p);
