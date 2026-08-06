@@ -309,9 +309,13 @@ function drawGroupTable(doc, { typology, lotId, group, state, startY }) {
         data.column.index < head[0].length - 1
       ) {
         if (data.cell.raw === 'X') {
+          // Coché → vert clair
           data.cell.styles.fillColor = [220, 252, 231];
           data.cell.styles.textColor = GREEN;
           data.cell.styles.fontStyle = 'bold';
+        } else {
+          // Non coché → rouge clair (repère visuel des points restants)
+          data.cell.styles.fillColor = [254, 226, 226];
         }
       }
       if (data.section === 'body' && data.column.index === head[0].length - 1) {
@@ -328,6 +332,26 @@ function drawGroupTable(doc, { typology, lotId, group, state, startY }) {
   });
 
   return doc.lastAutoTable.finalY;
+}
+
+// --------- Bandeau de titre de typologie ---------
+// Titre de section bien visible (fond bleu clair + barre + soulignement) pour
+// que le lecteur repère facilement le changement de typologie. Renvoie le Y final.
+function drawTypologyBanner(doc, label, y) {
+  const pageW = doc.internal.pageSize.getWidth();
+  const h = 9;
+  doc.setFillColor(219, 234, 254); // bleu clair (blue-100)
+  doc.rect(10, y, pageW - 20, h, 'F');
+  doc.setFillColor(...PRIMARY); // barre latérale d'accent
+  doc.rect(10, y, 1.6, h, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(...PRIMARY);
+  doc.text(label, 15, y + 6.2);
+  doc.setDrawColor(...PRIMARY); // soulignement
+  doc.setLineWidth(0.5);
+  doc.line(10, y + h, pageW - 10, y + h);
+  return y + h + 5;
 }
 
 // --------- Bloc photos par typologie ---------
@@ -523,17 +547,20 @@ export async function generateReport({
     const groups = groupsForLot(typology.id, lotId);
     if (!groups.length || groups.every((g) => !g.items.length)) continue;
 
-    if (cursorY > pageH - 80) {
+    // Éviter qu'un titre de typologie se retrouve seul en bas de page :
+    // s'il ne reste pas assez de place pour le bandeau + le début d'un tableau,
+    // on passe à la page suivante avant de dessiner le titre.
+    if (cursorY > pageH - 70) {
       doc.addPage();
       await drawHeader(doc, title);
       cursorY = 38;
     }
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.setTextColor(...PRIMARY);
-    doc.text(`${typology.label}  (${typology.units.length} unités)`, 10, cursorY);
-    cursorY += 4;
+    cursorY = drawTypologyBanner(
+      doc,
+      `${typology.label}  (${typology.units.length} unités)`,
+      cursorY
+    );
 
     for (const group of groups) {
       if (!group.items.length) continue;
