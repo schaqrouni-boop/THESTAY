@@ -187,13 +187,13 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
           groups.map((g) => (
             <section key={g.category}>
               <h2
-                className={`text-xs font-bold uppercase tracking-wide mb-2 px-1 flex items-center gap-2 ${
-                  g.priority ? 'text-red-700' : 'text-blue-800'
+                className={`mb-2 px-3 py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide shadow-sm flex items-center gap-2 ${
+                  g.priority ? 'bg-red-600 text-white' : 'bg-blue-800 text-white'
                 }`}
               >
-                {g.category}
+                <span className="flex-1 min-w-0">{g.category}</span>
                 {g.priority && (
-                  <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full normal-case">
+                  <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full normal-case flex-shrink-0">
                     ⚠ Priorité haute
                   </span>
                 )}
