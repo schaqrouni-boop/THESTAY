@@ -26,24 +26,22 @@ function mondayOfWeekKey(weekKey) {
   return monday;
 }
 
-// Libellé lisible, ex. "Semaine 38 · 15 – 21 sept. 2026".
+// Libellé lisible en plage de dates (Nabil raisonne du lundi au dimanche,
+// pas en numéro de semaine), ex. "Du 14 au 20 sept. 2026" — ou, à cheval sur
+// deux mois, "Du 29 sept. au 5 oct. 2026".
 export function weekRangeLabel(weekKey) {
   const monday = mondayOfWeekKey(weekKey);
   if (!monday) return weekKey || '';
   const sunday = new Date(monday);
   sunday.setUTCDate(monday.getUTCDate() + 6);
-  const week = +/W(\d{2})$/.exec(weekKey)[1];
-  const fmt = (dt) =>
-    dt.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', timeZone: 'UTC' });
-  return `Semaine ${week} · ${fmt(monday)} – ${fmt(sunday)} ${monday.getUTCFullYear()}`;
-}
-
-// Libellé court, ex. "Sem. 38 (15/09)".
-export function weekShortLabel(weekKey) {
-  const monday = mondayOfWeekKey(weekKey);
-  if (!monday) return weekKey || '';
-  const week = +/W(\d{2})$/.exec(weekKey)[1];
-  const fmt = (dt) =>
-    dt.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' });
-  return `Sem. ${week} · dès le ${fmt(monday)}`;
+  const day = (dt) => dt.toLocaleDateString('fr-FR', { day: 'numeric', timeZone: 'UTC' });
+  const dayMonth = (dt) =>
+    dt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const sameMonth =
+    monday.getUTCMonth() === sunday.getUTCMonth() &&
+    monday.getUTCFullYear() === sunday.getUTCFullYear();
+  const year = sunday.getUTCFullYear();
+  return sameMonth
+    ? `Du ${day(monday)} au ${dayMonth(sunday)} ${year}`
+    : `Du ${dayMonth(monday)} au ${dayMonth(sunday)} ${year}`;
 }
