@@ -60,6 +60,9 @@ export default function Home({
   onSelectLotReception,
   onOpenHistory,
   onOpenLotDashboard,
+  onOpenTodo,
+  onOpenTodoAdmin,
+  onOpenTodoHistory,
   onLogout,
   refreshKey
 }) {
@@ -145,6 +148,22 @@ export default function Home({
       </header>
 
       <main className="flex-1 px-4 py-6 pb-24">
+        {/* Retour vers la todo hebdomadaire (technicien) */}
+        {!isAdmin && (
+          <button
+            onClick={onOpenTodo}
+            className="w-full mb-4 bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target flex items-center gap-3"
+          >
+            <span className="text-4xl" aria-hidden>📋</span>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-lg text-slate-900 leading-tight">
+                Ma todo de la semaine
+              </h3>
+              <p className="text-xs text-blue-700 font-semibold mt-1">Voir mes tâches →</p>
+            </div>
+          </button>
+        )}
+
         {/* Sélecteur de mode de réception (technicien uniquement) */}
         {!isAdmin && (
           <div className="grid grid-cols-2 gap-2 mb-5">
@@ -273,6 +292,36 @@ export default function Home({
             <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
               Administration
             </h2>
+            <button
+              onClick={onOpenTodoAdmin}
+              className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-4xl" aria-hidden>📋</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-slate-900 leading-tight">Gérer la todo</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Points en instance affichés à Nabil chaque semaine
+                  </p>
+                  <p className="text-xs text-blue-700 font-semibold mt-2">Ajouter / éditer les points →</p>
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={onOpenTodoHistory}
+              className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-4xl" aria-hidden>📅</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-slate-900 leading-tight">Historique todo</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Todo remplies par Nabil, semaine par semaine
+                  </p>
+                  <p className="text-xs text-blue-700 font-semibold mt-2">Consulter les semaines →</p>
+                </div>
+              </div>
+            </button>
             <button
               onClick={onOpenLotDashboard}
               className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"

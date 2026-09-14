@@ -99,7 +99,8 @@ export async function createSnapshot({ technicianName, signatureDataUrl, state }
   const { error: promoteErr } = await supabase
     .from('photos')
     .update({ session_id: snap.id })
-    .is('session_id', null);
+    .is('session_id', null)
+    .neq('typo_id', 'todo'); // ne pas happer les photos de la todo hebdo
   if (promoteErr) {
     console.warn('Échec promotion photos draft', promoteErr);
   }
@@ -303,4 +304,115 @@ export async function deletePhoto(id) {
 
 export async function clearAllPhotos() {
   console.warn('clearAllPhotos: opération désactivée en mode cloud.');
+}
+
+// === TODO HEBDOMADAIRE ===
+// todo_items  : les points (gérés par l'admin), groupés par catégorie.
+// todo_entries: le remplissage du technicien, une ligne par (semaine, point).
+// Les photos réutilisent la table photos : typo_id='todo', unit_id=week_key,
+// section=String(item_id), session_id NULL (exclues de la promotion snapshot).
+
+export async function listTodoItems({ includeArchived = false } = {}) {
+  let q = supabase
+    .from('todo_items')
+    .select('*')
+    .order('position', { ascending: true })
+    .order('id', { ascending: true });
+  if (!includeArchived) q = q.eq('archived', false);
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+}
+
+export async function createTodoItem({ category, title, position }) {
+  const { data, error } = await supabase
+    .from('todo_items')
+    .insert({ category: category || '', title, position: position ?? Date.now() })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateTodoItem(id, patch) {
+  const { data, error } = await supabase
+    .from('todo_items')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteTodoItem(id) {
+  const { error } = await supabase.from('todo_items').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export function subscribeTodoItems(onChange) {
+  const channel = supabase
+    .channel('rt:todo_items')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_items' }, onChange)
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+export async function getTodoEntries(weekKey) {
+  const { data, error } = await supabase
+    .from('todo_entries')
+    .select('*')
+    .eq('week_key', weekKey);
+  if (error) throw error;
+  return data || [];
+}
+
+export async function upsertTodoEntry({ weekKey, item, done, comment, updatedBy }) {
+  const row = {
+    week_key: weekKey,
+    item_id: item.id,
+    item_category: item.category || '',
+    item_title: item.title || '',
+    done: !!done,
+    comment: comment || '',
+    updated_at: new Date().toISOString(),
+    updated_by: updatedBy || null
+  };
+  const { data, error } = await supabase
+    .from('todo_entries')
+    .upsert(row, { onConflict: 'week_key,item_id' })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export function subscribeTodoEntries(weekKey, onChange) {
+  const channel = supabase
+    .channel('rt:todo_entries:' + weekKey)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'todo_entries', filter: `week_key=eq.${weekKey}` },
+      onChange
+    )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+// Semaines présentes dans l'historique (du plus récent au plus ancien).
+export async function listTodoWeeks() {
+  const { data, error } = await supabase
+    .from('todo_entries')
+    .select('week_key')
+    .order('week_key', { ascending: false });
+  if (error) throw error;
+  const seen = new Set();
+  const out = [];
+  for (const r of data || []) {
+    if (!seen.has(r.week_key)) {
+      seen.add(r.week_key);
+      out.push(r.week_key);
+    }
+  }
+  return out;
 }

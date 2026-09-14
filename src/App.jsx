@@ -14,6 +14,9 @@ import LotDetailView from './LotDetailView.jsx';
 import LotUnitView from './LotUnitView.jsx';
 import SaveModal from './SaveModal.jsx';
 import PhotosSection from './PhotosSection.jsx';
+import TodoView from './TodoView.jsx';
+import TodoAdmin from './TodoAdmin.jsx';
+import TodoHistory from './TodoHistory.jsx';
 import {
   supabase,
   userInfoFromAuth,
@@ -485,6 +488,20 @@ export default function App() {
 
   const pushTimerRef = useRef(null);
   const lastPushedStateRef = useRef(JSON.stringify({}));
+  const initialViewSetRef = useRef(false);
+
+  // À la connexion, le technicien atterrit sur sa todo hebdomadaire ;
+  // l'admin garde l'accueil actuel. Ne s'exécute qu'une fois par session.
+  useEffect(() => {
+    if (!authUser) {
+      initialViewSetRef.current = false;
+      return;
+    }
+    if (initialViewSetRef.current) return;
+    initialViewSetRef.current = true;
+    const info = userInfoFromAuth(authUser);
+    if ((info?.role || 'tech') === 'tech') setView({ type: 'todo' });
+  }, [authUser]);
 
   // ---- Auth bootstrap ----
   useEffect(() => {
@@ -675,6 +692,30 @@ export default function App() {
     );
   }
 
+  if (view.type === 'todo') {
+    return (
+      <TodoView
+        user={displayName}
+        role={role}
+        onOpenReception={() => setView({ type: 'home' })}
+        onOpenHistory={() => setView({ type: 'todoHistory' })}
+        onLogout={logout}
+      />
+    );
+  }
+
+  if (view.type === 'todoAdmin') {
+    return <TodoAdmin onClose={() => setView({ type: 'home' })} />;
+  }
+
+  if (view.type === 'todoHistory') {
+    return (
+      <TodoHistory
+        onClose={() => setView({ type: role === 'admin' ? 'home' : 'todo' })}
+      />
+    );
+  }
+
   if (view.type === 'history') {
     return <HistoryView onClose={() => setView({ type: 'home' })} />;
   }
@@ -731,6 +772,9 @@ export default function App() {
           onSelectLotReception={(lotId) => setView({ type: 'lotDetail', lotId })}
           onOpenHistory={() => setView({ type: 'history' })}
           onOpenLotDashboard={() => setView({ type: 'lotDashboard' })}
+          onOpenTodo={() => setView({ type: 'todo' })}
+          onOpenTodoAdmin={() => setView({ type: 'todoAdmin' })}
+          onOpenTodoHistory={() => setView({ type: 'todoHistory' })}
           onLogout={logout}
         />
         {toast && (
