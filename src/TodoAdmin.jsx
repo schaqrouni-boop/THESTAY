@@ -231,10 +231,17 @@ export default function TodoAdmin({ onClose }) {
           </ul>
         )}
 
-        <p className="text-[11px] text-slate-500 text-center px-2">
-          Les modifications s'appliquent immédiatement à la semaine en cours. Les semaines passées
-          restent figées dans l'historique.
-        </p>
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3 text-[11px] text-slate-700 space-y-1">
+          <p>
+            <b>Priorité :</b> ajoutez <b>« (PRIORITÉ HAUTE) »</b> à la fin d'un nom de catégorie
+            pour l'afficher <span className="text-red-700 font-bold">en rouge</span> et en haut de la
+            todo de Nabil.
+          </p>
+          <p>
+            Les modifications s'appliquent immédiatement à la semaine en cours ; les semaines passées
+            restent figées dans l'historique.
+          </p>
+        </div>
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listTodoWeeks, getTodoEntries } from './storage.js';
-import { isoWeekKey, weekRangeLabel } from './todoWeek.js';
+import { isoWeekKey, weekRangeLabel, parseTodoCategory } from './todoWeek.js';
 import PhotosSection from './PhotosSection.jsx';
 
 // Historique des todo hebdomadaires (lecture seule). Chaque semaine est figée
@@ -9,11 +9,16 @@ import PhotosSection from './PhotosSection.jsx';
 function groupEntries(entries) {
   const map = new Map();
   for (const e of entries) {
-    const cat = e.item_category || 'Sans catégorie';
-    if (!map.has(cat)) map.set(cat, []);
-    map.get(cat).push(e);
+    const { name, priority } = parseTodoCategory(e.item_category);
+    if (!map.has(name)) map.set(name, { category: name, priority: false, items: [] });
+    const g = map.get(name);
+    g.items.push(e);
+    if (priority) g.priority = true;
   }
-  return Array.from(map.entries()).map(([category, list]) => ({ category, items: list }));
+  const arr = Array.from(map.values());
+  arr.forEach((g, i) => (g._i = i));
+  arr.sort((a, b) => Number(b.priority) - Number(a.priority) || a._i - b._i);
+  return arr;
 }
 
 export default function TodoHistory({ onClose }) {
@@ -82,15 +87,28 @@ export default function TodoHistory({ onClose }) {
           ) : (
             groups.map((g) => (
               <section key={g.category}>
-                <h2 className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-2 px-1">
+                <h2
+                  className={`text-xs font-bold uppercase tracking-wide mb-2 px-1 flex items-center gap-2 ${
+                    g.priority ? 'text-red-700' : 'text-blue-800'
+                  }`}
+                >
                   {g.category}
+                  {g.priority && (
+                    <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full normal-case">
+                      ⚠ Priorité haute
+                    </span>
+                  )}
                 </h2>
                 <div className="space-y-3">
                   {g.items.map((e) => (
                     <div
                       key={e.id}
                       className={`rounded-xl border-2 shadow-sm overflow-hidden ${
-                        e.done ? 'border-green-500 bg-green-50' : 'border-slate-300 bg-white'
+                        e.done
+                          ? 'border-green-500 bg-green-50'
+                          : g.priority
+                          ? 'border-red-400 bg-red-50'
+                          : 'border-slate-300 bg-white'
                       }`}
                     >
                       <div className="flex items-start gap-3 px-3 py-3">

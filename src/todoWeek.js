@@ -1,5 +1,16 @@
 // Utilitaires de semaine ISO (lundi → dimanche) pour la todo hebdomadaire.
 
+// Priorité de catégorie : une catégorie dont le libellé contient "(PRIORITÉ …)"
+// (ou toute variante contenant "prio", robuste aux fautes de frappe) est
+// considérée prioritaire → affichée en rouge et remontée en haut de la todo.
+// On renvoie le nom nettoyé (sans le marqueur) + le flag.
+export function parseTodoCategory(raw) {
+  const s = (raw || '').trim();
+  const priority = /prio/i.test(s);
+  const name = s.replace(/\s*\((?=[^)]*prio)[^)]*\)\s*$/i, '').trim() || 'Sans catégorie';
+  return { name, priority };
+}
+
 // Clé de semaine ISO, ex. "2026-W38".
 export function isoWeekKey(d = new Date()) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
