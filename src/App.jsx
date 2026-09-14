@@ -17,6 +17,7 @@ import PhotosSection from './PhotosSection.jsx';
 import TodoView from './TodoView.jsx';
 import TodoAdmin from './TodoAdmin.jsx';
 import TodoHistory from './TodoHistory.jsx';
+import ClosedApartmentsView from './ClosedApartmentsView.jsx';
 import {
   supabase,
   userInfoFromAuth,
@@ -699,6 +700,7 @@ export default function App() {
         role={role}
         onOpenReception={() => setView({ type: 'home' })}
         onOpenHistory={() => setView({ type: 'todoHistory' })}
+        onOpenClosed={() => setView({ type: 'closedApts' })}
         onLogout={logout}
       />
     );
@@ -711,6 +713,15 @@ export default function App() {
   if (view.type === 'todoHistory') {
     return (
       <TodoHistory
+        onClose={() => setView({ type: role === 'admin' ? 'home' : 'todo' })}
+      />
+    );
+  }
+
+  if (view.type === 'closedApts') {
+    return (
+      <ClosedApartmentsView
+        user={displayName}
         onClose={() => setView({ type: role === 'admin' ? 'home' : 'todo' })}
       />
     );
@@ -775,6 +786,7 @@ export default function App() {
           onOpenTodo={() => setView({ type: 'todo' })}
           onOpenTodoAdmin={() => setView({ type: 'todoAdmin' })}
           onOpenTodoHistory={() => setView({ type: 'todoHistory' })}
+          onOpenClosed={() => setView({ type: 'closedApts' })}
           onLogout={logout}
         />
         {toast && (

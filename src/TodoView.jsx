@@ -3,41 +3,56 @@ import {
   listTodoItems,
   getTodoEntries,
   upsertTodoEntry,
+  createTodoItem,
   subscribeTodoItems,
   subscribeTodoEntries
 } from './storage.js';
-import { isoWeekKey, weekRangeLabel, parseTodoCategory } from './todoWeek.js';
+import {
+  isoWeekKey,
+  weekRangeLabel,
+  parseTodoCategory,
+  priorityInfo,
+  PRIORITIES,
+  PRIORITY_KEYS
+} from './todoWeek.js';
 import PhotosSection from './PhotosSection.jsx';
 
 // Todo hebdomadaire du technicien.
-// - Points groupés par catégorie (gérés par l'admin), semaine calendaire auto.
-// - Catégories prioritaires affichées en rouge et en tête.
-// - Pour chaque point : case Done, commentaire (auto-save), photos.
+// - Points groupés par catégorie (affichée une seule fois), triés par priorité.
+// - Priorité par tâche (Extrême/Haute/Normale) avec picto + couleur.
+// - Filtre par priorité, section "PROBLEMES DIVERS NABIL" que Nabil alimente,
+//   lien vers le registre des appartements finis et fermés.
 
-function groupByCategory(items) {
+const NABIL_CATEGORY = 'PROBLEMES DIVERS NABIL';
+
+function buildGroups(items) {
   const map = new Map();
   for (const it of items) {
-    const { name, priority } = parseTodoCategory(it.category);
-    if (!map.has(name)) map.set(name, { category: name, priority: false, items: [] });
-    const g = map.get(name);
-    g.items.push(it);
-    if (priority) g.priority = true;
+    const { name } = parseTodoCategory(it.category);
+    if (!map.has(name)) map.set(name, { category: name, items: [] });
+    map.get(name).items.push(it);
   }
-  const arr = Array.from(map.values());
-  arr.forEach((g, i) => (g._i = i));
-  // Prioritaires d'abord, ordre d'apparition (position) conservé sinon.
-  arr.sort((a, b) => Number(b.priority) - Number(a.priority) || a._i - b._i);
-  return arr;
+  for (const g of map.values()) {
+    g.items.sort(
+      (a, b) =>
+        priorityInfo(a.priority).rank - priorityInfo(b.priority).rank ||
+        (a.position || 0) - (b.position || 0)
+    );
+  }
+  return Array.from(map.values());
 }
 
-export default function TodoView({ user, role, onOpenReception, onOpenHistory, onLogout }) {
+export default function TodoView({ user, role, onOpenReception, onOpenHistory, onOpenClosed, onLogout }) {
   const weekKey = useMemo(() => isoWeekKey(), []);
   const readOnly = role === 'admin';
 
   const [items, setItems] = useState([]);
-  const [entries, setEntries] = useState({}); // { [itemId]: { done, comment } }
+  const [entries, setEntries] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filter, setFilter] = useState('ALL');
+  const [newProblem, setNewProblem] = useState('');
+  const [newProblemPrio, setNewProblemPrio] = useState('HAUTE');
 
   const commentTimers = useRef({});
   const entriesRef = useRef({});
@@ -61,11 +76,9 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
     load();
     const unsubItems = subscribeTodoItems(() => load());
     const unsubEntries = subscribeTodoEntries(weekKey, (payload) => {
-      // MAJ ciblée sans tout recharger (évite d'écraser une saisie en cours).
       const row = payload.new;
       if (!row) return;
       setEntries((prev) => {
-        // Ne pas écraser si on a un timer de commentaire en attente pour ce point.
         if (commentTimers.current[row.item_id]) return prev;
         return { ...prev, [row.item_id]: { done: row.done, comment: row.comment || '' } };
       });
@@ -81,13 +94,7 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
 
   const saveEntry = async (item, next) => {
     try {
-      await upsertTodoEntry({
-        weekKey,
-        item,
-        done: next.done,
-        comment: next.comment,
-        updatedBy: user
-      });
+      await upsertTodoEntry({ weekKey, item, done: next.done, comment: next.comment, updatedBy: user });
     } catch (e) {
       console.warn('Sauvegarde todo KO', e);
     }
@@ -113,10 +120,94 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
     }, 800);
   };
 
-  const groups = groupByCategory(items);
+  const addProblem = async () => {
+    const title = newProblem.trim();
+    if (!title) return;
+    try {
+      await createTodoItem({
+        category: NABIL_CATEGORY,
+        title,
+        priority: newProblemPrio,
+        position: Date.now()
+      });
+      setNewProblem('');
+      await load();
+    } catch (e) {
+      setError('Ajout KO : ' + (e?.message || e));
+    }
+  };
+
+  const allGroups = buildGroups(items);
+  const mainGroups = allGroups.filter((g) => g.category !== NABIL_CATEGORY);
+  const nabilGroup = allGroups.find((g) => g.category === NABIL_CATEGORY) || {
+    category: NABIL_CATEGORY,
+    items: []
+  };
+
+  const matchFilter = (it) => filter === 'ALL' || String(it.priority || 'NORMALE').toUpperCase() === filter;
+
   const total = items.length;
   const done = items.filter((it) => entryFor(it.id).done).length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  const renderTask = (item, priorityAware = true) => {
+    const e = entryFor(item.id);
+    const pinfo = priorityInfo(item.priority);
+    return (
+      <div
+        key={item.id}
+        className={`rounded-xl border-2 shadow-sm overflow-hidden ${
+          e.done ? 'border-green-500 bg-green-50' : `${pinfo.cardBorder} ${pinfo.cardBg}`
+        }`}
+      >
+        <label
+          className={`flex items-start gap-3 px-3 py-3 ${
+            readOnly ? '' : 'cursor-pointer active:bg-black/5'
+          } tap-target`}
+        >
+          <input
+            type="checkbox"
+            className="big-check flex-shrink-0 mt-0.5"
+            checked={e.done}
+            onChange={() => toggleDone(item)}
+            disabled={readOnly}
+          />
+          <span className="text-lg flex-shrink-0 mt-0.5" title={pinfo.label} aria-hidden>
+            {pinfo.icon}
+          </span>
+          <span
+            className={`text-base flex-1 ${
+              e.done ? 'line-through text-slate-500' : 'text-slate-900 font-semibold'
+            }`}
+          >
+            {item.title}
+          </span>
+          {e.done && <span className="text-green-600 text-xl font-bold flex-shrink-0">✓</span>}
+        </label>
+        <div className="px-3 pb-3 space-y-3 border-t border-slate-200 bg-white/60">
+          <div className="pt-2">
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Commentaire</label>
+            <textarea
+              value={e.comment}
+              onChange={(ev) => changeComment(item, ev.target.value)}
+              readOnly={readOnly}
+              rows={2}
+              placeholder={readOnly ? '—' : 'Remarque, blocage, précision…'}
+              className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none resize-y"
+            />
+          </div>
+          <PhotosSection
+            typoId="todo"
+            unitId={weekKey}
+            section={String(item.id)}
+            enabled={true}
+            readOnly={readOnly}
+            labelOverride="Photos"
+          />
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-full flex flex-col bg-slate-100">
@@ -124,7 +215,7 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
         <div className="px-4 pt-3 pb-3">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
-              <h1 className="text-base font-bold leading-tight truncate">Ma todo de la semaine</h1>
+              <h1 className="text-base font-bold leading-tight truncate">Ma todo</h1>
               <p className="text-[11px] text-blue-100 truncate">
                 {weekRangeLabel(weekKey)} · {user}
               </p>
@@ -146,26 +237,53 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
               </span>
             </div>
             <div className="mt-1 w-full bg-blue-950/60 rounded-full h-2 overflow-hidden">
-              <div
-                className="bg-green-400 h-2 transition-all duration-300"
-                style={{ width: `${pct}%` }}
-              />
+              <div className="bg-green-400 h-2 transition-all duration-300" style={{ width: `${pct}%` }} />
             </div>
           </div>
 
           <div className="mt-3 flex gap-2">
             <button
               onClick={onOpenReception}
-              className="flex-1 bg-white/15 hover:bg-white/25 text-white text-sm font-semibold px-3 py-2 rounded-lg active:scale-95"
+              className="flex-1 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-2 py-2 rounded-lg active:scale-95"
             >
-              🛠️ Réception travaux
+              🛠️ Réception
+            </button>
+            <button
+              onClick={onOpenClosed}
+              className="flex-1 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-2 py-2 rounded-lg active:scale-95"
+            >
+              🏢 Appts fermés
             </button>
             <button
               onClick={onOpenHistory}
-              className="flex-1 bg-white/15 hover:bg-white/25 text-white text-sm font-semibold px-3 py-2 rounded-lg active:scale-95"
+              className="flex-1 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-2 py-2 rounded-lg active:scale-95"
             >
               📅 Historique
             </button>
+          </div>
+        </div>
+
+        {/* Filtre par priorité */}
+        <div className="bg-slate-100 border-t border-blue-900/30 px-3 py-2 overflow-x-auto">
+          <div className="flex gap-2">
+            {[{ key: 'ALL', label: 'Tout', icon: '📋' }, ...PRIORITY_KEYS.map((k) => ({ key: k, label: PRIORITIES[k].label, icon: PRIORITIES[k].icon }))].map(
+              (f) => {
+                const active = filter === f.key;
+                return (
+                  <button
+                    key={f.key}
+                    onClick={() => setFilter(f.key)}
+                    className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-semibold border-2 transition-colors ${
+                      active
+                        ? 'bg-blue-800 text-white border-blue-800'
+                        : 'bg-white text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    {f.icon} {f.label}
+                  </button>
+                );
+              }
+            )}
           </div>
         </div>
       </header>
@@ -177,94 +295,76 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
           <div className="bg-red-50 border-2 border-red-300 text-red-800 px-3 py-2 rounded-lg text-sm font-medium">
             {error}
           </div>
-        ) : total === 0 ? (
-          <div className="text-center text-slate-500 py-16">
-            <div className="text-5xl mb-3">✅</div>
-            <p className="font-bold text-lg">Aucun point cette semaine</p>
-            <p className="text-sm mt-2">Les points ajoutés par l'administration apparaîtront ici.</p>
-          </div>
         ) : (
-          groups.map((g) => (
-            <section key={g.category}>
-              <h2
-                className={`mb-2 px-3 py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide shadow-sm flex items-center gap-2 ${
-                  g.priority ? 'bg-red-600 text-white' : 'bg-blue-800 text-white'
-                }`}
-              >
-                <span className="flex-1 min-w-0">{g.category}</span>
-                {g.priority && (
-                  <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full normal-case flex-shrink-0">
-                    ⚠ Priorité haute
-                  </span>
-                )}
-              </h2>
-              <div className="space-y-3">
-                {g.items.map((item) => {
-                  const e = entryFor(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      className={`rounded-xl border-2 shadow-sm overflow-hidden ${
-                        e.done
-                          ? 'border-green-500 bg-green-50'
-                          : g.priority
-                          ? 'border-red-400 bg-red-50'
-                          : 'border-slate-300 bg-white'
-                      }`}
-                    >
-                      <label
-                        className={`flex items-start gap-3 px-3 py-3 ${
-                          readOnly ? '' : 'cursor-pointer active:bg-black/5'
-                        } tap-target`}
-                      >
-                        <input
-                          type="checkbox"
-                          className="big-check flex-shrink-0 mt-0.5"
-                          checked={e.done}
-                          onChange={() => toggleDone(item)}
-                          disabled={readOnly}
-                        />
-                        <span
-                          className={`text-base flex-1 ${
-                            e.done ? 'line-through text-slate-500' : 'text-slate-900 font-semibold'
-                          }`}
-                        >
-                          {item.title}
-                        </span>
-                        {e.done && (
-                          <span className="text-green-600 text-xl font-bold flex-shrink-0">✓</span>
-                        )}
-                      </label>
+          <>
+            {mainGroups.map((g) => {
+              const shown = g.items.filter(matchFilter);
+              if (shown.length === 0) return null;
+              return (
+                <section key={g.category}>
+                  <h2 className="mb-2 px-3 py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide shadow-sm bg-blue-800 text-white">
+                    {g.category}
+                  </h2>
+                  <div className="space-y-3">{shown.map((item) => renderTask(item))}</div>
+                </section>
+              );
+            })}
 
-                      <div className="px-3 pb-3 space-y-3 border-t border-slate-200 bg-white/60">
-                        <div className="pt-2">
-                          <label className="block text-xs font-semibold text-slate-600 mb-1">
-                            Commentaire
-                          </label>
-                          <textarea
-                            value={e.comment}
-                            onChange={(ev) => changeComment(item, ev.target.value)}
-                            readOnly={readOnly}
-                            rows={2}
-                            placeholder={readOnly ? '—' : 'Remarque, blocage, précision…'}
-                            className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:outline-none resize-y"
-                          />
-                        </div>
-                        <PhotosSection
-                          typoId="todo"
-                          unitId={weekKey}
-                          section={String(item.id)}
-                          enabled={true}
-                          readOnly={readOnly}
-                          labelOverride="Photos"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+            {total === 0 && (
+              <div className="text-center text-slate-500 py-10">
+                <div className="text-5xl mb-3">✅</div>
+                <p className="font-bold text-lg">Aucun point cette semaine</p>
+                <p className="text-sm mt-2">Les points ajoutés par l'administration apparaîtront ici.</p>
               </div>
-            </section>
-          ))
+            )}
+
+            {/* Section exclusive de Nabil */}
+            {(!readOnly || nabilGroup.items.length > 0) && (
+              <section>
+                <h2 className="mb-2 px-3 py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide shadow-sm bg-indigo-700 text-white flex items-center gap-2">
+                  <span aria-hidden>🧠</span>
+                  <span className="flex-1 min-w-0">Problèmes divers Nabil</span>
+                </h2>
+                {!readOnly && (
+                  <div className="bg-white rounded-xl border-2 border-indigo-200 p-3 mb-3 space-y-2">
+                    <p className="text-xs text-slate-500">
+                      Ajoute ici ce que tu remarques (à valider avec Saad).
+                    </p>
+                    <div className="flex gap-2">
+                      <select
+                        value={newProblemPrio}
+                        onChange={(e) => setNewProblemPrio(e.target.value)}
+                        className="px-2 py-2 text-sm border-2 border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      >
+                        {PRIORITY_KEYS.map((k) => (
+                          <option key={k} value={k}>
+                            {PRIORITIES[k].icon} {PRIORITIES[k].label}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={newProblem}
+                        onChange={(e) => setNewProblem(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addProblem()}
+                        placeholder="Nouveau problème / remarque…"
+                        className="flex-1 min-w-0 px-3 py-2 text-sm border-2 border-slate-300 rounded-lg focus:border-indigo-500 focus:outline-none"
+                      />
+                      <button
+                        onClick={addProblem}
+                        disabled={!newProblem.trim()}
+                        className="bg-indigo-700 hover:bg-indigo-800 disabled:opacity-50 text-white font-bold px-4 rounded-lg active:scale-95"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {nabilGroup.items.filter(matchFilter).map((item) => renderTask(item))}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </main>
 

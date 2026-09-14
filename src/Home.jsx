@@ -63,6 +63,7 @@ export default function Home({
   onOpenTodo,
   onOpenTodoAdmin,
   onOpenTodoHistory,
+  onOpenClosed,
   onLogout,
   refreshKey
 }) {
@@ -319,6 +320,21 @@ export default function Home({
                     Todo remplies par Nabil, semaine par semaine
                   </p>
                   <p className="text-xs text-blue-700 font-semibold mt-2">Consulter les semaines →</p>
+                </div>
+              </div>
+            </button>
+            <button
+              onClick={onOpenClosed}
+              className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-4xl" aria-hidden>🏢</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-slate-900 leading-tight">
+                    Appartements finis et fermés
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Registre des logements terminés</p>
+                  <p className="text-xs text-blue-700 font-semibold mt-2">Ouvrir le registre →</p>
                 </div>
               </div>
             </button>

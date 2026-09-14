@@ -1,5 +1,45 @@
 // Utilitaires de semaine ISO (lundi → dimanche) pour la todo hebdomadaire.
 
+// Priorité PAR TÂCHE : 3 niveaux avec picto + couleur + rang de tri.
+export const PRIORITIES = {
+  EXTREME: {
+    key: 'EXTREME',
+    label: 'Extrême',
+    icon: '🔴',
+    rank: 0,
+    badge: 'bg-red-600',
+    text: 'text-red-700',
+    cardBorder: 'border-red-400',
+    cardBg: 'bg-red-50'
+  },
+  HAUTE: {
+    key: 'HAUTE',
+    label: 'Haute',
+    icon: '🟠',
+    rank: 1,
+    badge: 'bg-orange-500',
+    text: 'text-orange-700',
+    cardBorder: 'border-orange-400',
+    cardBg: 'bg-orange-50'
+  },
+  NORMALE: {
+    key: 'NORMALE',
+    label: 'Normale',
+    icon: '🟢',
+    rank: 2,
+    badge: 'bg-emerald-600',
+    text: 'text-emerald-700',
+    cardBorder: 'border-slate-300',
+    cardBg: 'bg-white'
+  }
+};
+
+export const PRIORITY_KEYS = ['EXTREME', 'HAUTE', 'NORMALE'];
+
+export function priorityInfo(p) {
+  return PRIORITIES[String(p || 'NORMALE').toUpperCase()] || PRIORITIES.NORMALE;
+}
+
 // Priorité de catégorie : une catégorie dont le libellé contient "(PRIORITÉ …)"
 // (ou toute variante contenant "prio", robuste aux fautes de frappe) est
 // considérée prioritaire → affichée en rouge et remontée en haut de la todo.

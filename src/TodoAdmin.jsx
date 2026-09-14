@@ -5,6 +5,7 @@ import {
   updateTodoItem,
   deleteTodoItem
 } from './storage.js';
+import { PRIORITIES, PRIORITY_KEYS, priorityInfo } from './todoWeek.js';
 
 // Gestion de la todo (admin) : ajouter / éditer / supprimer / réordonner les
 // points, groupés par catégorie. Les changements s'appliquent immédiatement à
@@ -16,6 +17,7 @@ export default function TodoAdmin({ onClose }) {
   const [error, setError] = useState(null);
   const [newCat, setNewCat] = useState('');
   const [newTitle, setNewTitle] = useState('');
+  const [newPrio, setNewPrio] = useState('NORMALE');
   const [busy, setBusy] = useState(false);
   const commentTimers = useRef({});
 
@@ -45,7 +47,7 @@ export default function TodoAdmin({ onClose }) {
     setError(null);
     try {
       const maxPos = items.reduce((m, i) => Math.max(m, i.position || 0), 0);
-      await createTodoItem({ category: newCat.trim(), title, position: maxPos + 1 });
+      await createTodoItem({ category: newCat.trim(), title, position: maxPos + 1, priority: newPrio });
       setNewTitle('');
       await load();
     } catch (e) {
@@ -145,12 +147,24 @@ export default function TodoAdmin({ onClose }) {
             ))}
           </datalist>
           <div className="flex gap-2">
+            <select
+              value={newPrio}
+              onChange={(e) => setNewPrio(e.target.value)}
+              className="px-2 py-2.5 text-sm border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none flex-shrink-0"
+              title="Priorité"
+            >
+              {PRIORITY_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {PRIORITIES[k].icon} {PRIORITIES[k].label}
+                </option>
+              ))}
+            </select>
             <input
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && add()}
               placeholder="Intitulé du point"
-              className="flex-1 px-3 py-2.5 text-base border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none"
+              className="flex-1 min-w-0 px-3 py-2.5 text-base border-2 border-slate-300 rounded-lg focus:border-blue-600 focus:outline-none"
             />
             <button
               onClick={add}
@@ -217,6 +231,20 @@ export default function TodoAdmin({ onClose }) {
                       }}
                       className="w-full px-2 py-2 text-sm border border-slate-200 rounded focus:border-blue-500 focus:outline-none"
                     />
+                    <select
+                      value={item.priority || 'NORMALE'}
+                      onChange={(e) => {
+                        patchLocal(item.id, { priority: e.target.value });
+                        saveField(item.id, { priority: e.target.value }, false);
+                      }}
+                      className="w-full px-2 py-1.5 text-xs border border-slate-200 rounded focus:border-blue-500 focus:outline-none"
+                    >
+                      {PRIORITY_KEYS.map((k) => (
+                        <option key={k} value={k}>
+                          {PRIORITIES[k].icon} Priorité {PRIORITIES[k].label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <button
                     onClick={() => remove(item)}

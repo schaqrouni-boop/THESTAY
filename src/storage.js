@@ -324,10 +324,15 @@ export async function listTodoItems({ includeArchived = false } = {}) {
   return data || [];
 }
 
-export async function createTodoItem({ category, title, position }) {
+export async function createTodoItem({ category, title, position, priority }) {
   const { data, error } = await supabase
     .from('todo_items')
-    .insert({ category: category || '', title, position: position ?? Date.now() })
+    .insert({
+      category: category || '',
+      title,
+      position: position ?? Date.now(),
+      priority: priority || 'NORMALE'
+    })
     .select()
     .single();
   if (error) throw error;
@@ -373,6 +378,7 @@ export async function upsertTodoEntry({ weekKey, item, done, comment, updatedBy 
     item_id: item.id,
     item_category: item.category || '',
     item_title: item.title || '',
+    item_priority: item.priority || 'NORMALE',
     done: !!done,
     comment: comment || '',
     updated_at: new Date().toISOString(),
@@ -395,6 +401,36 @@ export function subscribeTodoEntries(weekKey, onChange) {
       { event: '*', schema: 'public', table: 'todo_entries', filter: `week_key=eq.${weekKey}` },
       onChange
     )
+    .subscribe();
+  return () => supabase.removeChannel(channel);
+}
+
+// === REGISTRE DES LOGEMENTS FINIS ET FERMÉS ===
+
+export async function listClosedApartments() {
+  const { data, error } = await supabase
+    .from('apartments_closed')
+    .select('unit_id, closed, updated_at, updated_by');
+  if (error) throw error;
+  const set = {};
+  for (const r of data || []) if (r.closed) set[r.unit_id] = r;
+  return set; // { [unitId]: row } uniquement les fermés
+}
+
+export async function setClosedApartment(unitId, closed, updatedBy) {
+  const { error } = await supabase
+    .from('apartments_closed')
+    .upsert(
+      { unit_id: unitId, closed: !!closed, updated_at: new Date().toISOString(), updated_by: updatedBy || null },
+      { onConflict: 'unit_id' }
+    );
+  if (error) throw error;
+}
+
+export function subscribeClosedApartments(onChange) {
+  const channel = supabase
+    .channel('rt:apartments_closed')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'apartments_closed' }, onChange)
     .subscribe();
   return () => supabase.removeChannel(channel);
 }
