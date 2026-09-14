@@ -407,23 +407,20 @@ export function subscribeTodoEntries(weekKey, onChange) {
 
 // === REGISTRE DES LOGEMENTS FINIS ET FERMÉS ===
 
-export async function listClosedApartments() {
-  const { data, error } = await supabase
-    .from('apartments_closed')
-    .select('unit_id, closed, updated_at, updated_by');
+// Checklist d'avancement par logement : { [unitId]: { [itemKey]: bool } }
+export async function getApartmentClosure() {
+  const { data, error } = await supabase.from('apartments_closed').select('unit_id, items');
   if (error) throw error;
-  const set = {};
-  for (const r of data || []) if (r.closed) set[r.unit_id] = r;
-  return set; // { [unitId]: row } uniquement les fermés
+  const map = {};
+  for (const r of data || []) map[r.unit_id] = r.items || {};
+  return map;
 }
 
-export async function setClosedApartment(unitId, closed, updatedBy) {
-  const { error } = await supabase
-    .from('apartments_closed')
-    .upsert(
-      { unit_id: unitId, closed: !!closed, updated_at: new Date().toISOString(), updated_by: updatedBy || null },
-      { onConflict: 'unit_id' }
-    );
+export async function setApartmentClosure(unitId, items, updatedBy) {
+  const { error } = await supabase.from('apartments_closed').upsert(
+    { unit_id: unitId, items: items || {}, updated_at: new Date().toISOString(), updated_by: updatedBy || null },
+    { onConflict: 'unit_id' }
+  );
   if (error) throw error;
 }
 

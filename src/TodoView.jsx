@@ -29,7 +29,7 @@ function buildGroups(items) {
   const map = new Map();
   for (const it of items) {
     const { name } = parseTodoCategory(it.category);
-    if (!map.has(name)) map.set(name, { category: name, items: [] });
+    if (!map.has(name)) map.set(name, { category: name, items: [], _i: map.size });
     map.get(name).items.push(it);
   }
   for (const g of map.values()) {
@@ -38,8 +38,11 @@ function buildGroups(items) {
         priorityInfo(a.priority).rank - priorityInfo(b.priority).rank ||
         (a.position || 0) - (b.position || 0)
     );
+    // Rang de la section = priorité la plus forte qu'elle contient (extrême = 0).
+    g.minRank = Math.min(...g.items.map((it) => priorityInfo(it.priority).rank));
   }
-  return Array.from(map.values());
+  // Sections triées : celles avec des points extrêmes d'abord, puis haute, puis normale.
+  return Array.from(map.values()).sort((a, b) => a.minRank - b.minRank || a._i - b._i);
 }
 
 export default function TodoView({ user, role, onOpenReception, onOpenHistory, onOpenClosed, onLogout }) {

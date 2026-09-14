@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { listTodoWeeks, getTodoEntries } from './storage.js';
-import { isoWeekKey, weekRangeLabel, parseTodoCategory } from './todoWeek.js';
+import { isoWeekKey, weekRangeLabel, parseTodoCategory, priorityInfo } from './todoWeek.js';
 import PhotosSection from './PhotosSection.jsx';
 
 // Historique des todo hebdomadaires (lecture seule). Chaque semaine est figée
@@ -9,16 +9,17 @@ import PhotosSection from './PhotosSection.jsx';
 function groupEntries(entries) {
   const map = new Map();
   for (const e of entries) {
-    const { name, priority } = parseTodoCategory(e.item_category);
-    if (!map.has(name)) map.set(name, { category: name, priority: false, items: [] });
-    const g = map.get(name);
-    g.items.push(e);
-    if (priority) g.priority = true;
+    const { name } = parseTodoCategory(e.item_category);
+    if (!map.has(name)) map.set(name, { category: name, items: [], _i: map.size });
+    map.get(name).items.push(e);
   }
-  const arr = Array.from(map.values());
-  arr.forEach((g, i) => (g._i = i));
-  arr.sort((a, b) => Number(b.priority) - Number(a.priority) || a._i - b._i);
-  return arr;
+  for (const g of map.values()) {
+    g.items.sort(
+      (a, b) => priorityInfo(a.item_priority).rank - priorityInfo(b.item_priority).rank
+    );
+    g.minRank = Math.min(...g.items.map((e) => priorityInfo(e.item_priority).rank));
+  }
+  return Array.from(map.values()).sort((a, b) => a.minRank - b.minRank || a._i - b._i);
 }
 
 export default function TodoHistory({ onClose }) {
@@ -87,28 +88,17 @@ export default function TodoHistory({ onClose }) {
           ) : (
             groups.map((g) => (
               <section key={g.category}>
-                <h2
-                  className={`mb-2 px-3 py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide shadow-sm flex items-center gap-2 ${
-                    g.priority ? 'bg-red-600 text-white' : 'bg-blue-800 text-white'
-                  }`}
-                >
-                  <span className="flex-1 min-w-0">{g.category}</span>
-                  {g.priority && (
-                    <span className="bg-white/25 text-white text-[10px] font-bold px-2 py-0.5 rounded-full normal-case flex-shrink-0">
-                      ⚠ Priorité haute
-                    </span>
-                  )}
+                <h2 className="mb-2 px-3 py-2.5 rounded-lg text-lg font-extrabold uppercase tracking-wide shadow-sm bg-blue-800 text-white">
+                  {g.category}
                 </h2>
                 <div className="space-y-3">
-                  {g.items.map((e) => (
+                  {g.items.map((e) => {
+                    const pinfo = priorityInfo(e.item_priority);
+                    return (
                     <div
                       key={e.id}
                       className={`rounded-xl border-2 shadow-sm overflow-hidden ${
-                        e.done
-                          ? 'border-green-500 bg-green-50'
-                          : g.priority
-                          ? 'border-red-400 bg-red-50'
-                          : 'border-slate-300 bg-white'
+                        e.done ? 'border-green-500 bg-green-50' : `${pinfo.cardBorder} ${pinfo.cardBg}`
                       }`}
                     >
                       <div className="flex items-start gap-3 px-3 py-3">
@@ -118,6 +108,9 @@ export default function TodoHistory({ onClose }) {
                           }`}
                         >
                           {e.done ? '✓' : '○'}
+                        </span>
+                        <span className="text-lg flex-shrink-0 mt-0.5" title={pinfo.label} aria-hidden>
+                          {pinfo.icon}
                         </span>
                         <span
                           className={`text-base flex-1 ${
@@ -145,7 +138,8 @@ export default function TodoHistory({ onClose }) {
                         />
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             ))
