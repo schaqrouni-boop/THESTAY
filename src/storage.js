@@ -432,6 +432,19 @@ export function subscribeClosedApartments(onChange) {
   return () => supabase.removeChannel(channel);
 }
 
+// Nombre de photos par point pour une semaine : { [section=item_id]: count }.
+export async function getTodoPhotoCounts(weekKey) {
+  const { data, error } = await supabase
+    .from('photos')
+    .select('section')
+    .eq('typo_id', 'todo')
+    .eq('unit_id', weekKey);
+  if (error) throw error;
+  const counts = {};
+  for (const r of data || []) counts[r.section] = (counts[r.section] || 0) + 1;
+  return counts;
+}
+
 // Semaines présentes dans l'historique (du plus récent au plus ancien).
 export async function listTodoWeeks() {
   const { data, error } = await supabase

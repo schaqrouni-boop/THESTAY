@@ -62,6 +62,7 @@ export default function Home({
   onOpenLotDashboard,
   onOpenTodo,
   onOpenTodoAdmin,
+  onOpenTodoOverview,
   onOpenTodoHistory,
   onOpenClosed,
   onLogout,
@@ -293,6 +294,23 @@ export default function Home({
             <h2 className="text-sm font-bold text-slate-600 uppercase tracking-wide mb-3 px-1">
               Administration
             </h2>
+            <button
+              onClick={onOpenTodoOverview}
+              className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-4xl" aria-hidden>👁️</span>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-lg text-slate-900 leading-tight">
+                    Vue todo — semaine en cours
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Consultation propre par section (fait / commentaires / photos)
+                  </p>
+                  <p className="text-xs text-blue-700 font-semibold mt-2">Voir la todo →</p>
+                </div>
+              </div>
+            </button>
             <button
               onClick={onOpenTodoAdmin}
               className="w-full bg-white rounded-2xl shadow-md border-2 border-blue-300 active:scale-[0.99] transition-transform p-4 text-left tap-target"

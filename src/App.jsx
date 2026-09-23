@@ -17,6 +17,7 @@ import PhotosSection from './PhotosSection.jsx';
 import TodoView from './TodoView.jsx';
 import TodoAdmin from './TodoAdmin.jsx';
 import TodoHistory from './TodoHistory.jsx';
+import TodoOverview from './TodoOverview.jsx';
 import ClosedApartmentsView from './ClosedApartmentsView.jsx';
 import {
   supabase,
@@ -710,6 +711,10 @@ export default function App() {
     return <TodoAdmin onClose={() => setView({ type: 'home' })} />;
   }
 
+  if (view.type === 'todoOverview') {
+    return <TodoOverview onClose={() => setView({ type: 'home' })} />;
+  }
+
   if (view.type === 'todoHistory') {
     return (
       <TodoHistory
@@ -785,6 +790,7 @@ export default function App() {
           onOpenLotDashboard={() => setView({ type: 'lotDashboard' })}
           onOpenTodo={() => setView({ type: 'todo' })}
           onOpenTodoAdmin={() => setView({ type: 'todoAdmin' })}
+          onOpenTodoOverview={() => setView({ type: 'todoOverview' })}
           onOpenTodoHistory={() => setView({ type: 'todoHistory' })}
           onOpenClosed={() => setView({ type: 'closedApts' })}
           onLogout={logout}
