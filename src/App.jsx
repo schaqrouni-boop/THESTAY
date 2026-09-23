@@ -416,7 +416,7 @@ function TypologyView({ user, role, typoId, state, onToggleItem, onBack, onExpor
         </div>
       </header>
 
-      <div className="sticky top-[110px] z-10 bg-slate-100 border-b border-slate-200 px-3 py-2 overflow-x-auto">
+      <div className="sticky top-[calc(110px+env(safe-area-inset-top))] z-10 bg-slate-100 border-b border-slate-200 px-3 py-2 overflow-x-auto">
         <div className="flex gap-2">
           {FILTERS.map((f) => {
             const isActive = filter === f.id;

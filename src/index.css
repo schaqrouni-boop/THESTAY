@@ -34,3 +34,15 @@ label,
 [role='button'] {
   -webkit-tap-highlight-color: transparent;
 }
+
+/* iOS PWA plein écran (status bar black-translucent) : décaler les barres
+   sous l'îlot / la barre d'état (haut) et au-dessus de la barre home (bas),
+   sinon les boutons retour passent sous le Dynamic Island et deviennent
+   intouchables. env() vaut 0 sur les appareils sans encoche → aucun effet. */
+header {
+  padding-top: calc(env(safe-area-inset-top) + 0.75rem) !important;
+}
+
+footer {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem) !important;
+}
