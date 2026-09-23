@@ -36,13 +36,24 @@ label,
 }
 
 /* iOS PWA plein écran (status bar black-translucent) : décaler les barres
-   sous l'îlot / la barre d'état (haut) et au-dessus de la barre home (bas),
-   sinon les boutons retour passent sous le Dynamic Island et deviennent
-   intouchables. env() vaut 0 sur les appareils sans encoche → aucun effet. */
+   sous l'îlot / la barre d'état (haut) et au-dessus de la barre home (bas). */
 header {
   padding-top: calc(env(safe-area-inset-top) + 0.75rem) !important;
 }
 
 footer {
   padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem) !important;
+}
+
+/* Filet de sécurité : en mode app installée (plein écran), certains iPhone
+   récents renvoient env(safe-area-inset-top) = 0, ce qui laissait le menu du
+   haut passer sous le Dynamic Island. On force alors une marge minimale
+   suffisante pour dégager l'îlot / la barre d'état. */
+@media all and (display-mode: standalone) {
+  header {
+    padding-top: calc(max(env(safe-area-inset-top), 59px) + 0.75rem) !important;
+  }
+  footer {
+    padding-bottom: calc(max(env(safe-area-inset-bottom), 20px) + 0.5rem) !important;
+  }
 }
