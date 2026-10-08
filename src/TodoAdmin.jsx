@@ -30,6 +30,9 @@ export default function TodoAdmin({ onClose }) {
   const [catEdit, setCatEdit] = useState({});
 
   const timers = useRef({});
+  const pending = useRef({}); // { id: patch } en attente d'écriture
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
 
   const load = async () => {
     try {
@@ -64,18 +67,40 @@ export default function TodoAdmin({ onClose }) {
   const patchLocal = (id, patch) =>
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
 
-  const saveField = (id, patch, debounce = true) => {
-    if (timers.current[id]) clearTimeout(timers.current[id]);
-    const run = async () => {
+  const flushOne = async (id) => {
+    if (timers.current[id]) {
+      clearTimeout(timers.current[id]);
       delete timers.current[id];
-      try {
-        await updateTodoItem(id, patch);
-      } catch (e) {
-        console.warn('MAJ point KO', e);
-      }
-    };
-    if (debounce) timers.current[id] = setTimeout(run, 700);
-    else run();
+    }
+    const p = pending.current[id];
+    if (!p) return;
+    delete pending.current[id];
+    try {
+      await updateTodoItem(id, p);
+    } catch (e) {
+      console.warn('MAJ point KO', e);
+    }
+  };
+
+  const saveField = (id, patch, debounce = true) => {
+    pending.current[id] = { ...(pending.current[id] || {}), ...patch };
+    if (timers.current[id]) clearTimeout(timers.current[id]);
+    if (debounce) timers.current[id] = setTimeout(() => flushOne(id), 700);
+    else flushOne(id);
+  };
+
+  // Force l'écriture de toutes les saisies en attente (champs texte débouncés).
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await Promise.all(Object.keys(pending.current).map((id) => flushOne(id)));
+      setSavedAt(Date.now());
+    } catch (e) {
+      setError('Enregistrement KO : ' + (e?.message || e));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addCategory = async () => {
@@ -178,14 +203,29 @@ export default function TodoAdmin({ onClose }) {
           >
             ← Accueil
           </button>
-          <div className="flex-1 min-w-0 text-center">
+          <div className="flex-1 min-w-0 text-center px-2">
             <h1 className="text-base font-bold leading-tight truncate">Gérer la todo</h1>
             <p className="text-[11px] text-blue-100">
               {categories.length} catégorie(s) · {items.length} point(s)
             </p>
           </div>
-          <div className="w-[88px]" />
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="bg-green-500 hover:bg-green-600 active:bg-green-700 disabled:opacity-60 text-white font-bold text-sm px-3 py-2 rounded-lg shadow active:scale-95 flex items-center gap-1 flex-shrink-0"
+            title="Enregistrer et mettre à jour chez Nabil"
+          >
+            <span aria-hidden>💾</span>
+            <span>{saving ? '…' : 'Enreg.'}</span>
+          </button>
         </div>
+        {savedAt && !saving && (
+          <div className="px-4 pb-2">
+            <p className="text-[11px] text-green-200 font-semibold">
+              ✓ Todo enregistrée à {new Date(savedAt).toLocaleTimeString('fr-FR')} — Nabil la voit à jour.
+            </p>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 px-3 py-4 pb-24 space-y-4">
@@ -351,10 +391,17 @@ export default function TodoAdmin({ onClose }) {
           ))
         )}
 
-        <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3 text-[11px] text-slate-700">
-          Priorité par point : 🔴 Extrême, 🟠 Haute, 🟢 Normale. Les sections se classent
-          automatiquement (celles qui contiennent un point extrême passent en tête). Les
-          modifications s'appliquent tout de suite à la semaine en cours ; l'historique reste figé.
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3 text-[11px] text-slate-700 space-y-1">
+          <p>
+            <b>Enregistrement :</b> chaque modification est sauvegardée automatiquement et visible
+            par Nabil en temps réel. Le bouton 💾 <b>Enreg.</b> force l'écriture des saisies en cours
+            et confirme.
+          </p>
+          <p>
+            Priorité par point : 🔴 Extrême, 🟠 Haute, 🟢 Normale. Les sections se classent
+            automatiquement (un point extrême fait remonter sa section). L'historique des semaines
+            passées reste figé.
+          </p>
         </div>
       </main>
     </div>
