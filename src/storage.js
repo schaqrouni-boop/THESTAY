@@ -355,6 +355,21 @@ export async function deleteTodoItem(id) {
   if (error) throw error;
 }
 
+// Renomme une catégorie entière (tous les points qui la portent).
+export async function renameTodoCategory(oldName, newName) {
+  const { error } = await supabase
+    .from('todo_items')
+    .update({ category: newName })
+    .eq('category', oldName);
+  if (error) throw error;
+}
+
+// Supprime une catégorie et tous ses points.
+export async function deleteTodoCategory(name) {
+  const { error } = await supabase.from('todo_items').delete().eq('category', name);
+  if (error) throw error;
+}
+
 export function subscribeTodoItems(onChange) {
   const channel = supabase
     .channel('rt:todo_items')
