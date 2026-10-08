@@ -370,6 +370,64 @@ export async function deleteTodoCategory(name) {
   if (error) throw error;
 }
 
+// Archive l'état d'une semaine (coches + commentaires) dans todo_archives avant
+// une remise à zéro, pour garder l'historique des todos précédentes.
+export async function archiveTodoWeek(weekKey, label) {
+  const { data: ents, error } = await supabase
+    .from('todo_entries')
+    .select('item_category, item_title, item_priority, done, comment')
+    .eq('week_key', weekKey);
+  if (error) throw error;
+  if (!ents || ents.length === 0) return null; // rien à archiver
+  const { data, error: e2 } = await supabase
+    .from('todo_archives')
+    .insert({ week_key: weekKey, label: label || '', data: ents })
+    .select('id')
+    .single();
+  if (e2) throw e2;
+  return data;
+}
+
+export async function listTodoArchives() {
+  const { data, error } = await supabase
+    .from('todo_archives')
+    .select('id, archived_at, week_key, label')
+    .order('archived_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getTodoArchive(id) {
+  const { data, error } = await supabase
+    .from('todo_archives')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+// Remet à zéro une semaine de todo : supprime les coches/commentaires (entries)
+// ET les photos de cette semaine → repart sur une todo fraîche pour le technicien.
+export async function resetTodoWeek(weekKey) {
+  const { error: e1 } = await supabase.from('todo_entries').delete().eq('week_key', weekKey);
+  if (e1) throw e1;
+  const { data: ph, error: e2 } = await supabase
+    .from('photos')
+    .select('storage_path')
+    .eq('typo_id', 'todo')
+    .eq('unit_id', weekKey);
+  if (e2) throw e2;
+  const paths = (ph || []).map((p) => p.storage_path).filter(Boolean);
+  if (paths.length) {
+    await supabase.storage
+      .from(PHOTOS_BUCKET)
+      .remove(paths)
+      .catch((e) => console.warn('Suppression photos todo KO', e));
+    await supabase.from('photos').delete().eq('typo_id', 'todo').eq('unit_id', weekKey);
+  }
+}
+
 export function subscribeTodoItems(onChange) {
   const channel = supabase
     .channel('rt:todo_items')

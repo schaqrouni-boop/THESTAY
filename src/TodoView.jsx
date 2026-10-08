@@ -80,7 +80,11 @@ export default function TodoView({ user, role, onOpenReception, onOpenHistory, o
     const unsubItems = subscribeTodoItems(() => load());
     const unsubEntries = subscribeTodoEntries(weekKey, (payload) => {
       const row = payload.new;
-      if (!row) return;
+      if (!row) {
+        // Suppression (ex. Saad publie une todo fraîche) → on recharge l'état.
+        load();
+        return;
+      }
       setEntries((prev) => {
         if (commentTimers.current[row.item_id]) return prev;
         return { ...prev, [row.item_id]: { done: row.done, comment: row.comment || '' } };

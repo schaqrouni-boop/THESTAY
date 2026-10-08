@@ -5,9 +5,11 @@ import {
   updateTodoItem,
   deleteTodoItem,
   renameTodoCategory,
-  deleteTodoCategory
+  deleteTodoCategory,
+  resetTodoWeek,
+  archiveTodoWeek
 } from './storage.js';
-import { PRIORITIES, PRIORITY_KEYS, priorityInfo } from './todoWeek.js';
+import { PRIORITIES, PRIORITY_KEYS, priorityInfo, isoWeekKey, weekRangeLabel } from './todoWeek.js';
 
 // Gestion de la todo (admin), vue GROUPÉE : chaque catégorie principale est
 // affichée une seule fois en tête, avec ses sous-tâches imbriquées dessous.
@@ -89,15 +91,28 @@ export default function TodoAdmin({ onClose }) {
     else flushOne(id);
   };
 
-  // Force l'écriture de toutes les saisies en attente (champs texte débouncés).
+  // Publie la todo : écrit les saisies en attente ET repart sur une semaine
+  // vierge (efface l'avancement de Nabil de la semaine en cours).
   const handleSave = async () => {
+    if (
+      !window.confirm(
+        'Publier une nouvelle todo fraîche ?\n\n' +
+          'La todo actuelle (avec l’avancement de Nabil) est d’abord archivée dans l’historique, ' +
+          'puis la semaine en cours repart à zéro : tout décoché, commentaires et photos effacés.'
+      )
+    )
+      return;
     setSaving(true);
     setError(null);
     try {
       await Promise.all(Object.keys(pending.current).map((id) => flushOne(id)));
+      const wk = isoWeekKey();
+      const label = `Publiée le ${new Date().toLocaleString('fr-FR')} · ${weekRangeLabel(wk)}`;
+      await archiveTodoWeek(wk, label); // archive avant la remise à zéro
+      await resetTodoWeek(wk);
       setSavedAt(Date.now());
     } catch (e) {
-      setError('Enregistrement KO : ' + (e?.message || e));
+      setError('Publication KO : ' + (e?.message || e));
     } finally {
       setSaving(false);
     }
@@ -213,16 +228,17 @@ export default function TodoAdmin({ onClose }) {
             onClick={handleSave}
             disabled={saving}
             className="bg-green-500 hover:bg-green-600 active:bg-green-700 disabled:opacity-60 text-white font-bold text-sm px-3 py-2 rounded-lg shadow active:scale-95 flex items-center gap-1 flex-shrink-0"
-            title="Enregistrer et mettre à jour chez Nabil"
+            title="Publier une todo fraîche (remet l'avancement de Nabil à zéro)"
           >
-            <span aria-hidden>💾</span>
-            <span>{saving ? '…' : 'Enreg.'}</span>
+            <span aria-hidden>🆕</span>
+            <span>{saving ? '…' : 'Publier'}</span>
           </button>
         </div>
         {savedAt && !saving && (
           <div className="px-4 pb-2">
             <p className="text-[11px] text-green-200 font-semibold">
-              ✓ Todo enregistrée à {new Date(savedAt).toLocaleTimeString('fr-FR')} — Nabil la voit à jour.
+              ✓ Nouvelle todo publiée à {new Date(savedAt).toLocaleTimeString('fr-FR')} — repartie à
+              zéro pour Nabil.
             </p>
           </div>
         )}
@@ -393,9 +409,11 @@ export default function TodoAdmin({ onClose }) {
 
         <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-3 text-[11px] text-slate-700 space-y-1">
           <p>
-            <b>Enregistrement :</b> chaque modification est sauvegardée automatiquement et visible
-            par Nabil en temps réel. Le bouton 💾 <b>Enreg.</b> force l'écriture des saisies en cours
-            et confirme.
+            <b>Éditer vs Publier :</b> tes modifications de la liste sont enregistrées
+            automatiquement (Nabil les voit en temps réel). Le bouton 🆕 <b>Publier</b> lance une
+            <b> todo fraîche</b> : il remet l'avancement de Nabil de la semaine en cours à zéro
+            (tout décoché, commentaires et photos de la semaine effacés). À utiliser quand tu veux
+            repartir d'une todo neuve.
           </p>
           <p>
             Priorité par point : 🔴 Extrême, 🟠 Haute, 🟢 Normale. Les sections se classent
