@@ -7,7 +7,9 @@ import {
   renameTodoCategory,
   deleteTodoCategory,
   resetTodoWeek,
-  archiveTodoWeek
+  archiveTodoWeek,
+  getTodoEntries,
+  subscribeTodoEntries
 } from './storage.js';
 import { PRIORITIES, PRIORITY_KEYS, priorityInfo, isoWeekKey, weekRangeLabel } from './todoWeek.js';
 
@@ -36,6 +38,10 @@ export default function TodoAdmin({ onClose }) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
 
+  // Avancement de Nabil pour la semaine en cours : { [item_id]: done }
+  const weekKey = useMemo(() => isoWeekKey(), []);
+  const [doneMap, setDoneMap] = useState({});
+
   const load = async () => {
     try {
       setItems(await listTodoItems());
@@ -46,8 +52,23 @@ export default function TodoAdmin({ onClose }) {
     }
   };
 
+  const loadEntries = async () => {
+    try {
+      const ents = await getTodoEntries(weekKey);
+      const m = {};
+      for (const e of ents) m[e.item_id] = e.done;
+      setDoneMap(m);
+    } catch (e) {
+      console.warn('Lecture avancement KO', e);
+    }
+  };
+
   useEffect(() => {
     load();
+    loadEntries();
+    const unsub = subscribeTodoEntries(weekKey, () => loadEntries());
+    return unsub;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Groupe par catégorie (ordre de première apparition), tâches triées par position.
@@ -310,6 +331,9 @@ export default function TodoAdmin({ onClose }) {
                   onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
                   className="flex-1 min-w-0 bg-transparent text-white text-base font-extrabold uppercase tracking-wide px-1 py-1 rounded focus:bg-blue-900 focus:outline-none"
                 />
+                <span className="flex-shrink-0 text-[11px] font-bold text-white bg-white/20 rounded-full px-2 py-0.5">
+                  {g.list.filter((i) => doneMap[i.id]).length}/{g.list.length}
+                </span>
                 <button
                   onClick={() => removeCategory(g.category)}
                   className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-900/60 hover:bg-red-600 text-white text-sm"
@@ -321,8 +345,10 @@ export default function TodoAdmin({ onClose }) {
 
               {/* Sous-tâches imbriquées */}
               <ul className="divide-y divide-slate-100">
-                {g.list.map((item, idx) => (
-                  <li key={item.id} className="px-2 py-2 flex items-center gap-1.5">
+                {g.list.map((item, idx) => {
+                  const done = !!doneMap[item.id];
+                  return (
+                  <li key={item.id} className={`px-2 py-2 flex items-center gap-1.5 ${done ? 'bg-green-50' : ''}`}>
                     <div className="flex flex-col flex-shrink-0">
                       <button
                         onClick={() => moveTask(g.list, idx, -1)}
@@ -362,8 +388,18 @@ export default function TodoAdmin({ onClose }) {
                         patchLocal(item.id, { title: e.target.value });
                         saveField(item.id, { title: e.target.value });
                       }}
-                      className="flex-1 min-w-0 px-2 py-2 text-sm border border-slate-200 rounded focus:border-blue-500 focus:outline-none"
+                      className={`flex-1 min-w-0 px-2 py-2 text-sm border border-slate-200 rounded focus:border-blue-500 focus:outline-none ${
+                        done ? 'line-through text-slate-400' : ''
+                      }`}
                     />
+                    {done && (
+                      <span
+                        className="flex-shrink-0 text-green-600 font-bold text-lg"
+                        title="Fait par Nabil cette semaine"
+                      >
+                        ✓
+                      </span>
+                    )}
                     <button
                       onClick={() => removeTask(item)}
                       className="flex-shrink-0 w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-600"
@@ -372,7 +408,8 @@ export default function TodoAdmin({ onClose }) {
                       🗑
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
 
               {/* Ajout d'une tâche dans cette catégorie */}
