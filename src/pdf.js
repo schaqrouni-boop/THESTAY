@@ -304,9 +304,10 @@ function drawGroupTable(doc, { typology, lotId, group, state, startY }) {
     let done = 0;
     const row = [unit];
     for (const it of items) {
-      const ok = !!us[it.key];
-      if (ok) done += 1;
-      row.push(ok ? 'X' : '');
+      const v = us[it.key];
+      if (v) done += 1;
+      // Item à choix (Validé/Moyen/Non) → affiche la valeur ; sinon X / vide.
+      row.push(v === true ? 'X' : typeof v === 'string' ? v : '');
     }
     const total = items.length;
     const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -345,10 +346,19 @@ function drawGroupTable(doc, { typology, lotId, group, state, startY }) {
         data.column.index > 0 &&
         data.column.index < head[0].length - 1
       ) {
-        if (data.cell.raw === 'X') {
-          // Coché → vert clair
+        const raw = String(data.cell.raw || '');
+        if (raw === 'X' || raw === 'Validé') {
+          // Coché / Validé → vert clair
           data.cell.styles.fillColor = [220, 252, 231];
           data.cell.styles.textColor = GREEN;
+          data.cell.styles.fontStyle = 'bold';
+        } else if (raw === 'Moyen') {
+          data.cell.styles.fillColor = [255, 237, 213];
+          data.cell.styles.textColor = ORANGE;
+          data.cell.styles.fontStyle = 'bold';
+        } else if (raw === 'Non') {
+          data.cell.styles.fillColor = [254, 202, 202];
+          data.cell.styles.textColor = [185, 28, 28];
           data.cell.styles.fontStyle = 'bold';
         } else {
           // Non coché → rouge clair (repère visuel des points restants)

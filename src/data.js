@@ -369,6 +369,19 @@ export const LOT_ITEMS = {
   }
 };
 
+// Items spéciaux à CHOIX (une option parmi N) au lieu d'une simple case.
+// La clé d'état stocke le libellé choisi (string). L'item compte comme "fait"
+// dès qu'une option est sélectionnée (valeur non vide).
+export const CHOICE_ITEMS = {
+  climatisation_climasec: {
+    'Essayage Climatisation': ['Validé', 'Moyen', 'Non']
+  }
+};
+
+export function choiceOptionsFor(lotId, itemKey) {
+  return CHOICE_ITEMS[lotId]?.[itemKey] || null;
+}
+
 export const TYPOLOGIES = [
   {
     id: 'studio',

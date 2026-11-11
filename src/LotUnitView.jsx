@@ -1,5 +1,6 @@
-import { LOTS, TYPOLOGIES, groupsForLot, flatItemsForLot } from './data.js';
+import { LOTS, TYPOLOGIES, groupsForLot, flatItemsForLot, choiceOptionsFor } from './data.js';
 import PhotosSection from './PhotosSection.jsx';
+import ChoiceControl from './ChoiceControl.jsx';
 
 // Vue admin : pour un couple (lot, typologie, unité), affiche la checklist
 // en lecture seule + la galerie photos (via PhotosSection en readOnly).
@@ -18,6 +19,7 @@ export default function LotUnitView({
   role,
   photosKey,
   onToggleItem,
+  onSetItemValue,
   onClose
 }) {
   const editable = role !== 'admin';
@@ -110,6 +112,32 @@ export default function LotUnitView({
                 )}
                 <ul className="space-y-1">
                   {g.items.map((it) => {
+                    const choiceOpts = choiceOptionsFor(lotId, it.key);
+                    if (choiceOpts) {
+                      const value = values?.[it.key] || '';
+                      return (
+                        <li key={it.key}>
+                          <div className="px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-slate-900">{it.label}</span>
+                              {!value && (
+                                <span className="text-[10px] font-bold text-red-600 uppercase flex-shrink-0">
+                                  à renseigner
+                                </span>
+                              )}
+                            </div>
+                            <ChoiceControl
+                              options={choiceOpts}
+                              value={value}
+                              onSelect={(opt) =>
+                                editable && onSetItemValue?.(typoId, unitId, lotId, it.key, opt)
+                              }
+                              readOnly={!editable}
+                            />
+                          </div>
+                        </li>
+                      );
+                    }
                     const checked = !!values?.[it.key];
                     return (
                       <li key={it.key}>

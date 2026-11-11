@@ -4,8 +4,10 @@ import {
   LOTS,
   lotsForTypology,
   groupsForLot,
-  flatItemsForLot
+  flatItemsForLot,
+  choiceOptionsFor
 } from './data.js';
+import ChoiceControl from './ChoiceControl.jsx';
 import Login from './Login.jsx';
 import Home from './Home.jsx';
 import HistoryView from './HistoryView.jsx';
@@ -157,7 +159,7 @@ function ProgressBar({ done, total, size = 'md' }) {
   );
 }
 
-function LotChecklist({ groups, values, onToggle, readOnly }) {
+function LotChecklist({ groups, values, lotId, onToggle, onSetValue, readOnly }) {
   return (
     <ul className="space-y-1">
       {groups.map((g, gi) => (
@@ -169,6 +171,30 @@ function LotChecklist({ groups, values, onToggle, readOnly }) {
           )}
           <ul className="space-y-1">
             {g.items.map((it) => {
+              const choiceOpts = choiceOptionsFor(lotId, it.key);
+              if (choiceOpts) {
+                const value = values?.[it.key] || '';
+                return (
+                  <li key={it.key}>
+                    <div className="px-3 py-3 rounded-lg bg-slate-50 border border-slate-200 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-base font-medium text-slate-900">{it.label}</span>
+                        {!value && (
+                          <span className="text-[10px] font-bold text-red-600 uppercase flex-shrink-0">
+                            à renseigner
+                          </span>
+                        )}
+                      </div>
+                      <ChoiceControl
+                        options={choiceOpts}
+                        value={value}
+                        onSelect={(opt) => onSetValue(it.key, opt)}
+                        readOnly={readOnly}
+                      />
+                    </div>
+                  </li>
+                );
+              }
               const checked = !!values?.[it.key];
               return (
                 <li key={it.key}>
@@ -207,7 +233,7 @@ function LotChecklist({ groups, values, onToggle, readOnly }) {
   );
 }
 
-function LotSection({ typoId, unitId, lot, state, onToggleItem, readOnly, photosKey }) {
+function LotSection({ typoId, unitId, lot, state, onToggleItem, onSetItemValue, readOnly, photosKey }) {
   const [open, setOpen] = useState(false);
   const groups = useMemo(() => groupsForLot(typoId, lot.id, unitId), [typoId, lot.id, unitId]);
   const { done, total } = lotProgress(state, typoId, unitId, lot.id);
@@ -250,7 +276,9 @@ function LotSection({ typoId, unitId, lot, state, onToggleItem, readOnly, photos
           <LotChecklist
             groups={groups}
             values={values}
+            lotId={lot.id}
             onToggle={(itemKey) => onToggleItem(lot.id, itemKey)}
+            onSetValue={(itemKey, value) => onSetItemValue(lot.id, itemKey, value)}
             readOnly={readOnly}
           />
           <div className="mt-3">
@@ -270,7 +298,7 @@ function LotSection({ typoId, unitId, lot, state, onToggleItem, readOnly, photos
   );
 }
 
-function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem, readOnly, photosKey }) {
+function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem, onSetItemValue, readOnly, photosKey }) {
   const { done, total } = unitProgress(state, typoId, unitId);
   const status = unitStatus(done, total);
   const c = statusColor(status);
@@ -314,6 +342,7 @@ function UnitCard({ typoId, unitId, state, isOpen, onToggleOpen, onToggleItem, r
               lot={lot}
               state={state}
               onToggleItem={(lotId, itemKey) => onToggleItem(lotId, itemKey)}
+              onSetItemValue={(lotId, itemKey, value) => onSetItemValue(lotId, itemKey, value)}
               readOnly={readOnly}
               photosKey={photosKey}
             />
@@ -331,7 +360,7 @@ const FILTERS = [
   { id: 'done', label: 'Terminé' }
 ];
 
-function TypologyView({ user, role, typoId, state, onToggleItem, onBack, onExportCSV, onSave, photosKey }) {
+function TypologyView({ user, role, typoId, state, onToggleItem, onSetItemValue, onBack, onExportCSV, onSave, photosKey }) {
   const [openUnitId, setOpenUnitId] = useState(null);
   const [filter, setFilter] = useState('all');
 
@@ -461,6 +490,9 @@ function TypologyView({ user, role, typoId, state, onToggleItem, onBack, onExpor
               isOpen={openUnitId === unitId}
               onToggleOpen={() => setOpenUnitId((prev) => (prev === unitId ? null : unitId))}
               onToggleItem={(lotId, itemKey) => onToggleItem(activeTypo.id, unitId, lotId, itemKey)}
+              onSetItemValue={(lotId, itemKey, value) =>
+                onSetItemValue(activeTypo.id, unitId, lotId, itemKey, value)
+              }
               readOnly={readOnly}
               photosKey={photosKey}
             />
@@ -615,6 +647,22 @@ export default function App() {
     });
   }, []);
 
+  // Item à choix (ex. Essayage Climatisation) : sélectionne une option ;
+  // re-cliquer l'option déjà choisie la désélectionne.
+  const setItemValue = useCallback((typoId, unitId, lotId, itemKey, value) => {
+    setState((prev) => {
+      const next = { ...prev };
+      const typoBlock = { ...(next[typoId] || {}) };
+      const unitBlock = { ...(typoBlock[unitId] || {}) };
+      const lotBlock = { ...(unitBlock[lotId] || {}) };
+      lotBlock[itemKey] = lotBlock[itemKey] === value ? false : value;
+      unitBlock[lotId] = lotBlock;
+      typoBlock[unitId] = unitBlock;
+      next[typoId] = typoBlock;
+      return next;
+    });
+  }, []);
+
   const exportCSV = useCallback(() => {
     const rows = [['Typologie', 'Unité', 'Lot', 'Groupe', 'Élément', 'État']];
     for (const typo of TYPOLOGIES) {
@@ -624,14 +672,9 @@ export default function App() {
           const items = flatItemsForLot(typo.id, lot.id, unit);
           const lotState = us[lot.id] || {};
           for (const it of items) {
-            rows.push([
-              typo.label,
-              unit,
-              lot.label,
-              it.group || '',
-              it.label,
-              lotState[it.key] ? 'OK' : ''
-            ]);
+            const v = lotState[it.key];
+            const etat = v === true ? 'OK' : typeof v === 'string' ? v : '';
+            rows.push([typo.label, unit, lot.label, it.group || '', it.label, etat]);
           }
         }
       }
@@ -771,6 +814,7 @@ export default function App() {
         role={role}
         photosKey={photosKey}
         onToggleItem={toggleItem}
+        onSetItemValue={setItemValue}
         onClose={() => setView({ type: 'lotDetail', lotId: view.lotId })}
       />
     );
@@ -814,6 +858,7 @@ export default function App() {
         typoId={view.typoId}
         state={state}
         onToggleItem={toggleItem}
+        onSetItemValue={setItemValue}
         onBack={() => setView({ type: 'home' })}
         onExportCSV={exportCSV}
         onSave={() => setSaveOpen(true)}
